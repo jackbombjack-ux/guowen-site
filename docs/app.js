@@ -276,6 +276,27 @@ function rock(r,x,y,w,h){
   return '<path d="'+d+'" fill="var(--ik3)" opacity=".94"/><path d="'+hl+'" fill="none" stroke="var(--ik1)" stroke-width="1.2" opacity=".45" stroke-linecap="round"/>';
 }
 
+/* ---------- 水墨 4.0:預先繪製的山水(亮/暗兩版),覆寫 scene / heroSVG ----------
+   山水圖由程式原創生成:層層遠山、雲霧、墨黑松崖。亮色用宣紙底,暗色用夜色墨景。 */
+function inkImgs(name,pos){
+  var st=pos?' style="object-position:'+pos+'"':'';
+  return '<img class="sc ir on-light" src="images/ink/'+name+'-light.webp" alt="" loading="lazy" decoding="async"'+st+'>'+
+         '<img class="sc ir on-dark" src="images/ink/'+name+'-dark.webp" alt="" loading="lazy" decoding="async"'+st+'>';
+}
+function scene(seed,o){
+  var n=Math.abs(Math.round(seed*3+(o&&o.pines?1:0)+(o&&o.sun?2:0)))%8;
+  return inkImgs('s'+n,'50% 72%');
+}
+function heroSVG(){
+  function layer(i,k){
+    return '<div class="hl hl'+i+(k?' px':'')+'"'+(k?' data-k="'+k+'"':'')+'>'+
+      '<img class="ir on-light" src="images/ink/hero-light-'+i+'.webp" alt="" decoding="async">'+
+      '<img class="ir on-dark" src="images/ink/hero-dark-'+i+'.webp" alt="" decoding="async"></div>';
+  }
+  return layer(0,0)+layer(1,9)+layer(2,20);
+}
+function footerMtn(){return ''}
+
 
 /* ---------- 狀態(預覽版存在瀏覽器本機) ---------- */
 var PROD=true;
@@ -768,10 +789,59 @@ async function signedMap(paths){
   return out;
 }
 var STATUS_ES={pending:'待批改',graded:'已批改'};
+/* 作文自動辨識:先交給後端(Google 辨識,每月有額度);額度用完或失敗時,改用瀏覽器內的免費辨識(Tesseract.js) */
+var TESS_URL='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+function loadTess(){
+  if(window.Tesseract)return Promise.resolve(window.Tesseract);
+  return new Promise(function(res,rej){var s=document.createElement('script');s.src=TESS_URL;s.onload=function(){window.Tesseract?res(window.Tesseract):rej(new Error('tess'))};s.onerror=function(){rej(new Error('tess'))};document.head.appendChild(s)});
+}
+function cleanOcr(t){
+  var C='[\\u3400-\\u9fff\\uf900-\\ufaff\\u3000-\\u303f\\uff00-\\uffef\\u2014\\u2026,.;:!?]';
+  t=String(t||'').replace(/\r/g,'').replace(/[ \t]+\n/g,'\n').replace(/\n[ \t]+/g,'\n');
+  t=t.replace(new RegExp('('+C+')[ \\t]+(?='+C+')','g'),'$1');
+  t=t.replace(new RegExp('('+C+')[ \\t]*\\n(?='+C+')','g'),'$1');
+  return t.replace(/\n[ \t]+/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+async function clientOcr(id,say){
+  var f=await sb.from('essay_files').select('path,page_no').eq('essay_id',id).eq('kind','submission').order('page_no');
+  var rows=(f.data||[]).filter(function(r){return /\.(jpe?g|png|webp)$/i.test(r.path)}).slice(0,8);
+  if(!rows.length)return '';
+  var sm=await signedMap(rows.map(function(r){return r.path}));
+  if(say)say('載入辨識工具…');
+  var T=await loadTess(),w=await T.createWorker('chi_tra'),out=[];
+  try{
+    for(var i=0;i<rows.length;i++){
+      if(!sm[rows[i].path])continue;
+      if(say)say('簡易辨識中('+(i+1)+'/'+rows.length+')…');
+      var r=await w.recognize(sm[rows[i].path]);
+      out.push(cleanOcr(r&&r.data&&r.data.text));
+    }
+  }finally{try{await w.terminate()}catch(_){}}
+  return out.filter(Boolean).join('\n');
+}
+function transcribeEssay(id,say){
+  return (async function(){
+    try{
+      var r=await sb.functions.invoke('transcribe-essay',{body:{essay_id:id}});
+      if(r&&r.error)return false;
+      var d=r&&r.data;
+      if(d&&d.fallback==='client'){
+        var txt=await clientOcr(id,say);
+        if(!txt)return false;
+        var r2=await sb.functions.invoke('transcribe-essay',{body:{essay_id:id,save_text:txt}});
+        return !(r2&&r2.error);
+      }
+      return true;
+    }catch(_){return false}
+  })();
+}
+var TX_NOTE={vision:'由 Google 文字辨識自動轉出,可能有誤字,以照片為準。',tesseract:'由瀏覽器簡易辨識轉出,錯字會比較多,以照片為準,老師會再校正。',manual:'老師已校正。'};
+var UNSEEN=0;
 async function fetchMyEssays(){
-  var r=await sb.from('essays').select('id,title,grade,status,feedback,created_at,graded_at,essay_files(path,kind,page_no)').eq('student_id',U.id).order('created_at',{ascending:false});
+  var r=await sb.from('essays').select('id,title,grade,status,feedback,created_at,graded_at,score,score_max,student_seen_at,transcript,transcript_status,transcript_engine,essay_files(path,kind,page_no)').eq('student_id',U.id).order('created_at',{ascending:false});
   return r.data||[];
 }
+function scoreTx(e){return e&&e.score!=null&&e.score_max!=null?(+e.score)+' / '+(+e.score_max):''}
 function dateShort(t){var d=new Date(t);return (d.getMonth()+1)+'/'+d.getDate()}
 
 function initEssay(){
@@ -781,7 +851,7 @@ function initEssay(){
     var box=$('#myEssays');if(!box)return;
     if(!U){box.innerHTML='<li class="none">登入後可以看到你的上傳紀錄</li>';return}
     var my=++seq,es=await fetchMyEssays();if(my!==seq)return;
-    box.innerHTML=es.length?es.map(function(e){var n=e.essay_files.filter(function(f){return f.kind==='submission'}).length;return '<li><span>'+esc(e.title)+'('+esc(e.grade||'')+'・'+n+' 張・'+dateShort(e.created_at)+')</span><em>'+STATUS_ES[e.status]+'</em></li>'}).join(''):'<li class="none">還沒有上傳紀錄</li>';
+    box.innerHTML=es.length?es.map(function(e){var n=e.essay_files.filter(function(f){return f.kind==='submission'}).length;return '<li><span>'+esc(e.title)+'('+esc(e.grade||'')+'・'+n+' 張・'+dateShort(e.created_at)+')</span><em>'+STATUS_ES[e.status]+(scoreTx(e)?'・'+scoreTx(e)+' 分':'')+'</em></li>'}).join(''):'<li class="none">還沒有上傳紀錄</li>';
   }
   function render(){
     if(!ready){p.innerHTML='<h3>上傳作文</h3><p class="lead">載入中…</p>';return}
@@ -819,7 +889,8 @@ function initEssay(){
       if(!upFiles.length){err.textContent='請至少上傳一張作文照片。';return}
       go.disabled=true;go.textContent='上傳中…';err.textContent='';
       try{
-        await submitEssay({student_id:U.id,created_by:U.id,source:'student',title:t,grade:$('#upGrade').value,note:$('#upNote').value.trim()||null,status:'pending'},upFiles);
+        var newId=await submitEssay({student_id:U.id,created_by:U.id,source:'student',title:t,grade:$('#upGrade').value,note:$('#upNote').value.trim()||null,status:'pending'},upFiles);
+        transcribeEssay(newId);
         var n=upFiles.length;clearThumbs();render();toast('已收到「'+t+'」共 '+n+' 張,老師批改後可在會員專區查看');
       }catch(ex){err.textContent='上傳失敗:'+niceErr(ex);go.disabled=false;go.textContent='送出批改'}
     });
@@ -865,18 +936,26 @@ function initMember(){
       app.innerHTML='<div class="gate"><h2>登入會員</h2><p>使用 Google 帳號登入,即可查看你的課程、作文批改與資源。</p><button type="button" class="gbtn" id="gLogin2" style="max-width:340px;margin:0 auto"><span class="g" aria-hidden="true">G</span>使用 Google 帳號登入</button><p class="mfoot">不需要另外設定密碼。</p></div>';
       $('#gLogin2').addEventListener('click',function(){askLogin()});return;
     }
+    if(tab!=='e'){try{var ur=await sb.from('essays').select('id,status,student_seen_at').eq('student_id',U.id).eq('status','graded');UNSEEN=(ur.data||[]).filter(function(x){return !x.student_seen_at}).length}catch(_){UNSEEN=0}if(my!==rendering)return}
     var body='';
     if(tab==='c'){
       var cs=Object.keys(ENR).map(function(id){var c=byId(GW.courses,id);return c?'<li><a href="'+c.learn+'">'+esc(c.name)+'</a><em>前往學習</em></li>':''}).join('')||'<li class="none">尚未報名課程。<a href="courses.html" style="text-decoration:underline;margin-left:6px">看看線上課程</a></li>';
       body='<h2>我的課程</h2><ul class="mlist">'+cs+'</ul>';
     }else if(tab==='e'){
       var es=await fetchMyEssays();if(my!==rendering)return;
-      var fpaths=[];es.forEach(function(e){e.essay_files.forEach(function(f){if(f.kind==='feedback')fpaths.push(f.path)})});
+      var fpaths=[];es.forEach(function(e){e.essay_files.forEach(function(f){fpaths.push(f.path)})});
       var sm=await signedMap(fpaths);if(my!==rendering)return;
+      if(es.some(function(x){return x.status==='graded'&&!x.student_seen_at})){sb.rpc('mark_essays_seen').then(function(){UNSEEN=0})}
       body='<h2>我的作文</h2><ul class="mlist">'+(es.map(function(e){
-        var fb=e.status==='graded'?'<div class="fbk"><b>老師評語</b><p>'+esc(e.feedback||'(老師已批改,沒有文字評語)').replace(/\n/g,'<br>')+'</p>'+e.essay_files.filter(function(f){return f.kind==='feedback'&&sm[f.path]}).sort(function(a,b){return a.page_no-b.page_no}).map(function(f){return '<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="老師批改照片" loading="lazy"></a>'}).join('')+'</div>':'';
-        var n=e.essay_files.filter(function(f){return f.kind==='submission'}).length;
-        return '<li class="col"><div class="l1"><span>'+esc(e.title)+'('+esc(e.grade||'')+'・'+n+' 張・'+dateShort(e.created_at)+')</span><em>'+STATUS_ES[e.status]+'</em></div>'+fb+'</li>'}).join('')||'<li class="none">尚未上傳作文。<a href="essay.html" style="text-decoration:underline;margin-left:6px">前往作文批改</a></li>')+'</ul>';
+        var fb=e.status==='graded'?'<div class="fbk">'+(scoreTx(e)?'<div class="scorebox"><span>分數</span><b>'+esc(scoreTx(e))+'</b></div>':'')+'<b>老師評語</b><p>'+esc(e.feedback||'(老師已批改,沒有文字評語)').replace(/\n/g,'<br>')+'</p>'+e.essay_files.filter(function(f){return f.kind==='feedback'&&sm[f.path]}).sort(function(a,b){return a.page_no-b.page_no}).map(function(f){return '<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="老師批改照片" loading="lazy"></a>'}).join('')+'</div>':'';
+        var subs=e.essay_files.filter(function(f){return f.kind==='submission'}).sort(function(a,b){return a.page_no-b.page_no});
+        var n=subs.length;
+        var imgs=subs.filter(function(f){return sm[f.path]}).map(function(f,i){return '<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="作文第 '+(i+1)+' 頁" loading="lazy"></a>'}).join('');
+        var tx;
+        if(e.transcript_status==='done'&&e.transcript)tx='<b>作文文字</b><span class="tnote">'+esc(TX_NOTE[e.transcript_engine]||TX_NOTE.vision)+'</span><div class="ttext">'+esc(e.transcript).replace(/\n/g,'<br>')+'</div>';
+        else if(e.transcript_status==='pending')tx='<b>作文文字</b><p class="tnote">辨識中,請稍後切換分頁再看。</p>';
+        else tx='<b>作文文字</b><p class="tnote">尚未辨識。</p><button type="button" class="btn btn-line sm" data-retx="'+e.id+'">自動辨識</button>';
+        return '<li class="col"><div class="l1"><span>'+esc(e.title)+'('+esc(e.grade||'')+'・'+n+' 張・'+dateShort(e.created_at)+')</span><em>'+(e.status==='graded'&&!e.student_seen_at?'<span class="newpill">新批改</span>':'')+STATUS_ES[e.status]+'</em></div><div class="ecols"><div class="eimgs">'+imgs+'</div><div class="etext">'+tx+'</div></div>'+fb+'</li>'}).join('')||'<li class="none">尚未上傳作文。<a href="essay.html" style="text-decoration:underline;margin-left:6px">前往作文批改</a></li>')+'</ul>';
     }else if(tab==='r'){
       var rs=Object.keys(CLAIMED).map(function(id){var r=PUB.resources[id];return r?'<li><span>'+esc(r.name)+'</span><em><button type="button" class="more" data-dl="'+esc(id)+'">下載</button></em></li>':''}).join('')||'<li class="none">尚未領取資源。<a href="resources.html" style="text-decoration:underline;margin-left:6px">免費資源</a></li>';
       body='<h2>我的資源</h2><ul class="mlist">'+rs+'</ul>';
@@ -893,13 +972,18 @@ function initMember(){
         (on&&MEM.status==='active'&&MEM.plan?'<button type="button" class="btn btn-line" id="cancelSub">取消續約</button> ':'')+(isAdmin()?'<a class="btn btn-line" href="admin.html">老師後台</a> ':'')+'<button type="button" class="btn btn-line" id="logoutBtn">登出</button>';
     }
     app.innerHTML=payMsg+'<div class="profile"><span class="av">'+esc((U.name||'?').charAt(0).toUpperCase())+'</span><div><b>'+esc(U.name)+'</b><small>'+esc(U.email)+'</small></div></div>'+
-     '<div class="tabs mtabs" role="tablist">'+[['c','我的課程'],['e','我的作文'],['r','我的資源'],['o','我的訂單'],['a','帳號']].map(function(t){return '<button type="button" role="tab" data-t="'+t[0]+'" aria-selected="'+(tab===t[0])+'">'+t[1]+'</button>'}).join('')+'</div><div class="panel">'+body+'</div>';
+     '<div class="tabs mtabs" role="tablist">'+[['c','我的課程'],['e','我的作文'],['r','我的資源'],['o','我的訂單'],['a','帳號']].map(function(t){return '<button type="button" role="tab" data-t="'+t[0]+'" aria-selected="'+(tab===t[0])+'">'+t[1]+(t[0]==='e'&&UNSEEN>0&&tab!=='e'?' <span class="newpill">'+UNSEEN+'</span>':'')+'</button>'}).join('')+'</div><div class="panel">'+body+'</div>';
     $$('[data-t]',app).forEach(function(b){b.addEventListener('click',function(){tab=b.getAttribute('data-t');render()})});
     $$('[data-dl]',app).forEach(function(b){b.addEventListener('click',async function(){
       var rr=PUB.resources[b.getAttribute('data-dl')];
       if(!rr||!rr.storage_path){toast('檔案還在準備中');return}
       var s=await sb.storage.from('resources').createSignedUrl(rr.storage_path,120);
       if(s.data)window.open(s.data.signedUrl,'_blank','noopener');else toast('下載失敗,請稍後再試');
+    })});
+    $$('[data-retx]',app).forEach(function(b){b.addEventListener('click',async function(){
+      b.disabled=true;b.textContent='辨識中…';
+      var ok=await transcribeEssay(b.getAttribute('data-retx'),function(m){b.textContent=m});
+      toast(ok?'辨識完成':'辨識暫時失敗,請稍後再試');render();
     })});
     var lo=$('#logoutBtn');if(lo)lo.addEventListener('click',signOut);
     var cs2=$('#cancelSub');
@@ -946,7 +1030,7 @@ function initAdmin(){
   /* --- 作文 --- */
   TABS.e=async function(body){
     await loadNames();
-    var r=await sb.from('essays').select('id,student_id,source,source_note,title,grade,note,status,feedback,created_at').order('status',{ascending:false}).order('created_at',{ascending:false}).limit(150);
+    var r=await sb.from('essays').select('id,student_id,source,source_note,title,grade,note,status,feedback,created_at,score,score_max,transcript,transcript_status,transcript_engine').order('status',{ascending:false}).order('created_at',{ascending:false}).limit(150);
     var rows=r.data||[];
     var h='<div class="upanel" id="tPanel" style="margin-bottom:18px"><div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap"><div><h3>老師自行上傳作文</h3><p class="lead" style="margin-bottom:0">手邊額外需要批閱的作文,可以直接上傳,和學生送來的作文一起排進待批改。</p></div><button type="button" class="btn btn-line sm" id="tToggle" aria-expanded="'+tf.open+'">'+(tf.open?'收合':'＋ 上傳作文')+'</button></div>';
     if(tf.open){
@@ -958,7 +1042,7 @@ function initAdmin(){
     }
     h+='</div><div class="twrap"><table class="tbl"><thead><tr><th>學生</th><th>題目</th><th>年級</th><th>來源</th><th>日期</th><th>狀態</th><th></th></tr></thead><tbody>'+
       rows.map(function(e){var teacher=e.source==='teacher';
-        return '<tr><td>'+esc(teacher?(e.source_note||'(老師自行上傳)'):nm(e.student_id))+'</td><td>'+esc(e.title)+'</td><td>'+esc(e.grade||'')+'</td><td><span class="pill'+(teacher?' ok':'')+'">'+(teacher?'老師上傳':'學生上傳')+'</span></td><td>'+dateShort(e.created_at)+'</td><td><span class="pill '+(e.status==='pending'?'warn':'ok')+'">'+STATUS_ES[e.status]+'</span></td><td><button type="button" class="btn btn-line sm" data-gr="'+e.id+'">'+(e.status==='pending'?'批改':'查看')+'</button></td></tr>'}).join('')+(rows.length?'':'<tr><td colspan="7" class="none">還沒有作文</td></tr>')+'</tbody></table></div>';
+        return '<tr><td>'+esc(teacher?(e.source_note||'(老師自行上傳)'):nm(e.student_id))+'</td><td>'+esc(e.title)+'</td><td>'+esc(e.grade||'')+'</td><td><span class="pill'+(teacher?' ok':'')+'">'+(teacher?'老師上傳':'學生上傳')+'</span></td><td>'+dateShort(e.created_at)+'</td><td><span class="pill '+(e.status==='pending'?'warn':'ok')+'">'+STATUS_ES[e.status]+'</span>'+(scoreTx(e)?' <small>'+esc(scoreTx(e))+'</small>':'')+'</td><td><button type="button" class="btn btn-line sm" data-gr="'+e.id+'">'+(e.status==='pending'?'批改':'查看')+'</button></td></tr>'}).join('')+(rows.length?'':'<tr><td colspan="7" class="none">還沒有作文</td></tr>')+'</tbody></table></div>';
     body.innerHTML=h;
     var tt=$('#tToggle');tt.addEventListener('click',function(){tf.open=!tf.open;render()});
     var tForm=$('#tForm');
@@ -980,7 +1064,8 @@ function initAdmin(){
         if(!tFiles.length){er.textContent='請至少上傳一張作文照片。';return}
         go.disabled=true;go.textContent='上傳中…';
         try{
-          await submitEssay({student_id:null,created_by:U.id,source:'teacher',source_note:$('#tWho').value.trim()||null,title:t,grade:$('#tGrade').value,status:'pending'},tFiles);
+          var tId=await submitEssay({student_id:null,created_by:U.id,source:'teacher',source_note:$('#tWho').value.trim()||null,title:t,grade:$('#tGrade').value,status:'pending'},tFiles);
+          transcribeEssay(tId);
           var n=tFiles.length;clearT();tf.who='';tf.title='';tf.open=false;toast('已加入「'+t+'」共 '+n+' 張,列在待批改');render();
         }catch(ex){er.textContent='上傳失敗:'+niceErr(ex);go.disabled=false;go.textContent='加入待批改'}
       });
@@ -992,18 +1077,52 @@ function initAdmin(){
     var fr=await sb.from('essay_files').select('path,kind,page_no').eq('essay_id',id).order('page_no');
     var files=fr.data||[],sm=await signedMap(files.map(function(f){return f.path}));
     var subs=files.filter(function(f){return f.kind==='submission'}),fbs=files.filter(function(f){return f.kind==='feedback'});
-    var fpick=[];
+    var fpick=[],TPL=[],tplEdit=false;
+    try{var tr=await sb.from('feedback_templates').select('id,label,body,sort_order').order('sort_order');TPL=tr.data||[]}catch(_){}
+    var lastMax='';try{lastMax=localStorage.getItem('gw-score-max')||''}catch(_){}
+    var maxV=e.score_max!=null?e.score_max:(lastMax||60);
     openModal('<h3 id="mTitle">'+esc(e.title)+'</h3><p class="lead">'+esc(e.source==='teacher'?(e.source_note||'老師自行上傳'):nm(e.student_id))+'・'+esc(e.grade||'')+'・'+fmtDate(e.created_at)+'</p>'+
       (e.note?'<p class="gnote"><b>學生留言:</b>'+esc(e.note)+'</p>':'')+
       '<div class="gimgs">'+subs.map(function(f,i){return sm[f.path]?'<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="作文第 '+(i+1)+' 頁"></a>':''}).join('')+'</div>'+
       (fbs.length?'<p class="gnote"><b>已上傳的批改照片:</b></p><div class="gimgs">'+fbs.map(function(f){return sm[f.path]?'<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="批改照片"></a>':''}).join('')+'</div>':'')+
+      '<label class="fld" for="gTx">作文文字(自動辨識,可直接修改;學生也看得到)<textarea id="gTx" rows="8" maxlength="20000" placeholder="'+(e.transcript_status==='pending'?'辨識中…請稍後按「重新辨識」更新':'尚未辨識')+'">'+esc(e.transcript||'')+'</textarea></label><button type="button" class="btn btn-line sm" id="gRetx" style="margin:-4px 0 12px">重新辨識</button>'+
+      '<div class="scoreRow"><label for="gScore">分數<input id="gScore" type="number" inputmode="decimal" min="0" max="100" step="0.5" value="'+(e.score!=null?e.score:'')+'" placeholder="例如 45"></label><span class="sl">/</span><label for="gMax">滿分<input id="gMax" type="number" inputmode="decimal" min="1" max="100" step="0.5" value="'+maxV+'"></label><small>不打分數就留空</small></div>'+
+      '<div class="fld"><div class="tplHead"><span>評語範本(點一下插入)</span><button type="button" class="more" id="tplMng">管理</button></div><div class="tplRow" id="tplRow"></div></div>'+
       '<label class="fld" for="gFb">文字評語<textarea id="gFb" rows="6" maxlength="4000" placeholder="寫給學生的評語與建議">'+esc(e.feedback||'')+'</textarea></label>'+
+      '<div class="tplSave"><button type="button" class="more" id="tplAdd">＋ 把目前評語存成範本</button><span id="tplForm" hidden><input id="tplLabel" maxlength="20" placeholder="範本名稱(20 字內)"> <button type="button" class="btn btn-line sm" id="tplOk">存</button></span></div>'+
       '<label class="fld" for="gFile">批改後的照片(選填,JPG / PNG / WebP)<input id="gFile" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>'+
       '<div class="err" id="gErr" role="alert"></div><button type="button" class="btn btn-fill" id="gGo" style="width:100%">'+(e.status==='graded'?'更新評語':'儲存並標為已批改')+'</button>',function(){
+        function drawTpl(){
+          var row=$('#tplRow');if(!row)return;
+          row.innerHTML=TPL.length?TPL.map(function(t){return '<span class="tplc"><button type="button" class="chip" data-tpl="'+t.id+'" title="'+esc(t.body)+'">'+esc(t.label)+'</button>'+(tplEdit?'<button type="button" class="tplx" data-tdel="'+t.id+'" aria-label="刪除範本 '+esc(t.label)+'">×</button>':'')+'</span>'}).join(''):'<span class="tnote">還沒有範本,寫好評語後可以存成範本。</span>';
+          $$('[data-tpl]',row).forEach(function(b){b.addEventListener('click',function(){var t=TPL.filter(function(x){return String(x.id)===b.getAttribute('data-tpl')})[0];if(!t)return;var ta=$('#gFb');var cur=ta.value;ta.value=(cur&&!/\n$/.test(cur)?cur+'\n':cur)+t.body;if(ta.value.length>4000)ta.value=ta.value.slice(0,4000);ta.focus()})});
+          $$('[data-tdel]',row).forEach(function(b){b.addEventListener('click',async function(){var id2=b.getAttribute('data-tdel');var dr=await sb.from('feedback_templates').delete().eq('id',+id2);if(dr.error){$('#gErr').textContent='刪除範本失敗:'+niceErr(dr.error);return}TPL=TPL.filter(function(x){return String(x.id)!==id2});drawTpl()})});
+        }
+        drawTpl();
+        $('#tplMng').addEventListener('click',function(){tplEdit=!tplEdit;this.textContent=tplEdit?'完成':'管理';drawTpl()});
+        $('#tplAdd').addEventListener('click',function(){var er=$('#gErr');if(!$('#gFb').value.trim()){er.textContent='先寫好評語,才能存成範本。';return}er.textContent='';$('#tplForm').hidden=false;$('#tplLabel').focus()});
+        $('#tplOk').addEventListener('click',async function(){
+          var er=$('#gErr'),lb=$('#tplLabel').value.trim(),bd=$('#gFb').value.trim();
+          if(!lb){er.textContent='請幫範本取個名稱。';return}
+          if(bd.length>1000){er.textContent='範本最多 1000 字,請縮短後再存。';return}
+          var ins=await sb.from('feedback_templates').insert({label:lb,body:bd,sort_order:TPL.length+1}).select('id,label,body,sort_order');
+          if(ins.error){er.textContent='存範本失敗:'+niceErr(ins.error);return}
+          var row0=(ins.data&&ins.data[0])||null;if(row0)TPL.push(row0);
+          $('#tplLabel').value='';$('#tplForm').hidden=true;er.textContent='';drawTpl();toast('已存成範本');
+        });
+        $('#gRetx').addEventListener('click',async function(){
+          var bt=this;bt.disabled=true;bt.textContent='辨識中…';
+          var ok=await transcribeEssay(id,function(m){bt.textContent=m});
+          if(ok){var rr=await sb.from('essays').select('transcript,transcript_engine').eq('id',id).maybeSingle();if(rr.data){$('#gTx').value=rr.data.transcript||'';e.transcript=rr.data.transcript;e.transcript_status='done';e.transcript_engine=rr.data.transcript_engine}}
+          else $('#gErr').textContent='辨識暫時失敗,請稍後再試。';
+          bt.disabled=false;bt.textContent='重新辨識';
+        });
         $('#gFile').addEventListener('change',function(){fpick=[];var er=$('#gErr');er.textContent='';Array.prototype.forEach.call(this.files,function(f){var m=checkFile(f,fpick);if(m){er.textContent=m;return}fpick.push(f)})});
         $('#gGo').addEventListener('click',async function(){
           var er=$('#gErr'),fb=$('#gFb').value.trim();
           if(!fb&&!fpick.length&&!fbs.length){er.textContent='請寫下評語,或上傳批改後的照片。';return}
+          var sc=$('#gScore').value.trim(),mx=$('#gMax').value.trim(),scN=null,mxN=null;
+          if(sc!==''){scN=+sc;mxN=+mx;if(!isFinite(scN)||!isFinite(mxN)||mx===''){er.textContent='請填寫分數與滿分。';return}if(mxN<1||mxN>100){er.textContent='滿分請填 1 到 100。';return}if(scN<0||scN>mxN){er.textContent='分數要在 0 到滿分之間。';return}}
           this.disabled=true;this.textContent='儲存中…';
           var up=[];
           try{
@@ -1014,9 +1133,14 @@ function initAdmin(){
               if(u.error)throw u.error;up.push(path);
             }
             if(up.length){var ir=await sb.from('essay_files').insert(up.map(function(p,i){return {essay_id:id,path:p,page_no:i+1,kind:'feedback'}}));if(ir.error)throw ir.error}
-            var ur=await sb.from('essays').update({status:'graded',feedback:fb||null,graded_at:new Date().toISOString(),graded_by:U.id}).eq('id',id);
+            var upd={status:'graded',feedback:fb||null,graded_at:new Date().toISOString(),graded_by:U.id,score:scN,score_max:scN==null?null:mxN,student_seen_at:null};
+            var txv=$('#gTx').value.trim();
+            if(txv!==(e.transcript||'').trim()){upd.transcript=txv||null;upd.transcript_status=txv?'done':'none';upd.transcript_engine=txv?'manual':null;upd.transcript_at=new Date().toISOString()}
+            var ur=await sb.from('essays').update(upd).eq('id',id);
             if(ur.error)throw ur.error;
-            closeDlg(modal);toast('已儲存批改');render();
+            if(scN!=null){try{localStorage.setItem('gw-score-max',String(mxN))}catch(_){}}
+            var told=false;try{var nr=await callFn('notify-graded',{essay_id:id});told=!!(nr&&nr.ok&&!nr.already)}catch(_){}
+            closeDlg(modal);toast(told?'已儲存批改,並寄信通知學生':'已儲存批改');render();
           }catch(ex){
             try{if(up.length)await sb.storage.from('essays').remove(up)}catch(_){}
             er.textContent='儲存失敗:'+niceErr(ex);this.disabled=false;this.textContent='儲存並標為已批改';

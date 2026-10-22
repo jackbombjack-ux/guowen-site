@@ -819,6 +819,87 @@ dialog .modal-box{box-shadow:var(--shadow),inset 0 0 0 5px var(--card),inset 0 0
 ::selection{background:color-mix(in srgb,var(--seal) 30%,transparent)}
 @media (prefers-reduced-motion: reduce){.fx .rv{transition:none}.site-header::before{transition:none}}
 
+/* =====================================================================
+   水墨 4.0:與 logo 呼應 —— 琥珀金漸層、墨黑、朱紅印章、祥雲
+   ===================================================================== */
+:root{
+  --paper:#F8F5EE; --paper-2:#EFE9DB; --card:#FDFBF6; --card-glass:rgba(253,251,246,.88);
+  --text:#17150F; --text-soft:#5F5A50; --line:rgba(80,60,28,.15); --line-strong:rgba(80,60,28,.32);
+  --gold-grad:linear-gradient(135deg,#9B6515 0%,#DDB04F 30%,#F5DA86 50%,#CE9C33 70%,#8C5A13 100%);
+  --gold-line:linear-gradient(90deg,#8C5A13,#D9AB46 35%,#F2D47C 55%,#C79631 80%,transparent);
+  --bronze-a:#E2C176; --bronze-b:#B8862F; --bronze-text:#86590F; --on-bronze:#2B1A05; --seal:#C21F2B;
+  --btn-bg:#B8862F; --btn-fg:#2B1A05;
+  --dark:#16130E; --dark-text:#EFE8D6; --dark-soft:#B3AA97; --dark-line:rgba(239,232,214,.15);
+  --sc-top:#F8F5EE; --sc-bot:#ECE6D8; --frame:rgba(184,134,47,.36);
+  --shadow:0 14px 34px rgba(70,48,14,.13); --shadow-sm:0 4px 14px rgba(70,48,14,.09);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0E1219; --paper-2:#141A24; --card:#171E29; --card-glass:rgba(23,30,41,.86);
+  --text:#EEE8D8; --text-soft:#A7ADB6;
+  --gold-grad:linear-gradient(135deg,#B07C22 0%,#E9C468 32%,#FBE9A6 50%,#DDAF49 70%,#A06B18 100%);
+  --bronze-a:#E6C77C; --bronze-b:#C9A05A; --bronze-text:#E2C47D; --on-bronze:#1B1305; --seal:#DB4C48;
+  --btn-bg:#E2C47D; --btn-fg:#1B1305; --dark:#090C11; --frame:rgba(226,196,125,.26);
+  --sc-top:#0E131C; --sc-bot:#222F40}}
+:root[data-theme="dark"]{
+  --paper:#0E1219; --paper-2:#141A24; --card:#171E29; --card-glass:rgba(23,30,41,.86);
+  --text:#EEE8D8; --text-soft:#A7ADB6;
+  --gold-grad:linear-gradient(135deg,#B07C22 0%,#E9C468 32%,#FBE9A6 50%,#DDAF49 70%,#A06B18 100%);
+  --bronze-a:#E6C77C; --bronze-b:#C9A05A; --bronze-text:#E2C47D; --on-bronze:#1B1305; --seal:#DB4C48;
+  --btn-bg:#E2C47D; --btn-fg:#1B1305; --dark:#090C11; --frame:rgba(226,196,125,.26);
+  --sc-top:#0E131C; --sc-bot:#222F40}
+
+/* ---------- 山水圖片 ---------- */
+.ir{display:block;object-fit:cover;object-position:50% 70%;-webkit-user-drag:none;user-select:none}
+img.sc.ir{position:absolute;inset:0;width:100%;height:100%}
+.ir.on-dark{display:none}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ir.on-light{display:none}:root:not([data-theme="light"]) .ir.on-dark{display:block}}
+:root[data-theme="dark"] .ir.on-light{display:none}
+:root[data-theme="dark"] .ir.on-dark{display:block}
+.hero-art{overflow:hidden}
+.hero-art .hl{position:absolute;inset:-4% -2%;will-change:transform}
+.hero-art .hl .ir{width:100%;height:100%;object-position:50% 100%}
+.hero-art .hl0 .ir{object-position:50% 100%}
+.hero-fade{background:radial-gradient(60% 86% at 18% 48%,rgba(248,245,238,.90) 0%,rgba(248,245,238,.62) 46%,transparent 80%)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .hero-fade{background:radial-gradient(60% 86% at 18% 48%,rgba(14,18,25,.80) 0%,rgba(14,18,25,.48) 46%,transparent 80%)}}
+:root[data-theme="dark"] .hero-fade{background:radial-gradient(60% 86% at 18% 48%,rgba(14,18,25,.80) 0%,rgba(14,18,25,.48) 46%,transparent 80%)}
+.phero .art .ir{object-position:50% 74%}
+.phero .art::after{background:linear-gradient(90deg,var(--paper) 6%,color-mix(in srgb,var(--paper) 55%,transparent) 42%,transparent 78%);opacity:.94}
+.vid .sc{opacity:.9;filter:none}
+
+/* ---------- 祥雲(取自 logo) ---------- */
+.hero-art::before,.hero-art::after,.phero::before{content:"";position:absolute;background:url(images/cloud-gold.png) center/contain no-repeat;pointer-events:none;z-index:2;
+  filter:drop-shadow(0 6px 10px rgba(120,80,16,.22))}
+.hero-art::before{width:clamp(120px,17vw,220px);aspect-ratio:264/116;left:42%;top:5%;opacity:.95}
+.hero-art::after{width:clamp(80px,10vw,128px);aspect-ratio:264/116;left:7%;top:5%;opacity:.8;transform:scaleX(-1)}
+.phero::before{width:clamp(90px,11vw,150px);aspect-ratio:264/116;right:max(70px,calc((100% - 1200px)/2 + 64px));top:16%;opacity:.9;z-index:1}
+@media (max-width:760px){.hero-art::before{left:auto;right:4%;top:-1%;width:80px}.hero-art::after{display:none}.phero::before{display:none}}
+
+/* ---------- 金色:標題線、按鈕、導覽 ---------- */
+.sec-head h2::after{background:var(--gold-line)!important}
+.site-header::after{background:linear-gradient(90deg,transparent,#C79631 18%,#F0D27A 50%,#C79631 82%,transparent);opacity:.55}
+.site-header::before{background:linear-gradient(90deg,transparent,#C79631,#F0D27A)}
+.btn-fill{background:var(--gold-grad);color:#2B1A05;text-shadow:0 1px 0 rgba(255,240,196,.55);letter-spacing:.1em;font-weight:700;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 -1px 0 rgba(104,64,8,.4),0 8px 18px -8px rgba(140,92,18,.6)}
+.btn-fill:hover{background:var(--gold-grad);filter:brightness(1.07) saturate(1.05);box-shadow:inset 0 1px 0 rgba(255,255,255,.7),inset 0 -1px 0 rgba(104,64,8,.45),0 12px 24px -8px rgba(140,92,18,.7)}
+.btn-fill:disabled{filter:grayscale(.5) brightness(.95)}
+.btn-line{border-color:var(--text);color:var(--text)}
+.btn-line:hover{background:color-mix(in srgb,var(--bronze-a) 22%,transparent);border-color:var(--bronze-b)}
+.btn-gold{background:var(--gold-grad);color:#2B1A05}
+.nav a[aria-current="page"],.nav a.on{color:var(--bronze-text)}
+::selection{background:rgba(222,176,79,.38)}
+.tile b,.plan .pp b{color:var(--bronze-text)}
+
+/* ---------- 頁尾:墨黑 + 金線 ---------- */
+.footer{background:var(--dark);border-top:2px solid transparent;border-image:var(--gold-line) 1}
+
+/* ---------- 首頁入口卡:磨砂玻璃,讓後面的墨山透出來 ---------- */
+.qcard{background:color-mix(in srgb,var(--card) 56%,transparent);backdrop-filter:blur(12px) saturate(1.15);-webkit-backdrop-filter:blur(12px) saturate(1.15);
+  border:1px solid color-mix(in srgb,var(--bronze-a) 55%,transparent);box-shadow:0 12px 30px -14px rgba(40,28,8,.45),inset 0 1px 0 rgba(255,255,255,.5)}
+.qcard:hover{background:color-mix(in srgb,var(--card) 74%,transparent)}
+.qcard .go{border-color:var(--bronze-b);color:var(--bronze-text)}
+.hero-fade{background:radial-gradient(56% 84% at 17% 50%,rgba(248,245,238,.86) 0%,rgba(248,245,238,.52) 46%,transparent 78%)}
+.qcard p{color:var(--text);opacity:.82}
+
 /* 正式版補充樣式 */
 .mlist li.col{display:block}
 .mlist li.col .l1{display:flex;gap:10px;justify-content:space-between;align-items:baseline;flex-wrap:wrap}
@@ -849,6 +930,42 @@ dialog .modal-box{box-shadow:var(--shadow),inset 0 0 0 5px var(--card),inset 0 0
 #modal textarea{width:100%}
 #adminApp .tabs{overflow-x:auto;max-width:100%}
 #adminApp .tabs button{white-space:nowrap;flex:0 0 auto}
+
+/* 作文:照片 + 辨識文字並排 */
+.ecols{display:grid;gap:14px;margin-top:12px}
+@media(min-width:720px){.ecols{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)}}
+.eimgs{display:grid;gap:8px;align-content:start;max-height:60vh;overflow:auto}
+.eimgs img{width:100%;border-radius:8px;display:block;border:1px solid var(--line)}
+.etext{min-width:0}
+.etext b{font-family:var(--font-serif);letter-spacing:.06em}
+.ttext{margin-top:6px;padding:12px 14px;background:var(--paper-2);border-radius:10px;line-height:1.95;font-size:15px;overflow-wrap:anywhere;max-height:60vh;overflow:auto}
+.tnote{display:block;font-size:12.5px;color:var(--text-soft);margin:4px 0}
+#gTx{font-family:var(--font-serif);line-height:1.8}
+
+/* 作文:分數、範本、新批改提示 */
+.scorebox{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+.scorebox span{font-size:13px;color:var(--text-soft);letter-spacing:.08em}
+.scorebox b{font-family:var(--font-serif);font-size:26px;letter-spacing:.02em;color:var(--bronze-text)}
+.newpill{display:inline-block;font-style:normal;font-size:12px;line-height:1;padding:3px 8px;border-radius:999px;background:var(--seal,#b5382a);color:#fff;margin-right:6px;vertical-align:middle;letter-spacing:.04em}
+.mtabs .newpill{margin:0 0 0 4px;padding:3px 7px}
+.scoreRow{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.scoreRow label{display:grid;gap:4px;font-size:14px}
+.scoreRow input{width:92px;font:inherit;font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--text)}
+.scoreRow .sl{padding-bottom:10px;color:var(--text-soft)}
+.scoreRow small{padding-bottom:10px;color:var(--text-soft);font-size:12.5px}
+.tplHead{display:flex;justify-content:space-between;align-items:center;font-size:14px;margin-bottom:6px}
+.tplRow{display:flex;flex-wrap:wrap;gap:6px}
+.tplc{display:inline-flex;align-items:center}
+.chip{font:inherit;font-size:13px;padding:5px 11px;border:1px solid var(--bronze-b,var(--line));border-radius:999px;background:var(--paper-2);color:var(--text);cursor:pointer}
+.chip:hover{border-color:var(--bronze-text)}
+.tplx{font:inherit;font-size:15px;line-height:1;margin-left:2px;border:0;background:none;color:var(--text-soft);cursor:pointer;padding:4px 6px}
+.tplx:hover{color:#b5382a}
+.tplSave{margin:-4px 0 12px;font-size:13px}
+.tplSave input{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--text);max-width:100%;width:190px}
+
+/* a11y: LINE 綠按鈕對比度 */
+.btn-line-green{background:#067A38;color:#fff}
+.btn-line-green:hover{background:#056530}
 
 /* 多頁補充 */
 .hero-tag{font-family:var(--font-serif);font-weight:600;font-size:clamp(14px,1.6vw,17px);letter-spacing:.3em;color:var(--bronze-text);margin-bottom:14px}
