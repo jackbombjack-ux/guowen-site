@@ -814,7 +814,9 @@ async function clientOcr(id,say){
       if(!sm[rows[i].path])continue;
       if(say)say('簡易辨識中('+(i+1)+'/'+rows.length+')…');
       var r=await w.recognize(sm[rows[i].path]);
-      out.push(cleanOcr(r&&r.data&&r.data.text));
+      var cf=(r&&r.data&&typeof r.data.confidence==='number')?r.data.confidence:0;
+      /* 手寫、直書或稿紙格線的照片,簡易辨識會變成亂碼;信心不足就不採用,避免學生看到一堆錯字 */
+      if(cf>=65)out.push(cleanOcr(r&&r.data&&r.data.text));
     }
   }finally{try{await w.terminate()}catch(_){}}
   return out.filter(Boolean).join('\n');
@@ -983,7 +985,7 @@ function initMember(){
     $$('[data-retx]',app).forEach(function(b){b.addEventListener('click',async function(){
       b.disabled=true;b.textContent='辨識中…';
       var ok=await transcribeEssay(b.getAttribute('data-retx'),function(m){b.textContent=m});
-      toast(ok?'辨識完成':'辨識暫時失敗,請稍後再試');render();
+      toast(ok?'辨識完成':'這張照片無法自動辨識,老師會直接看照片批改');render();
     })});
     var lo=$('#logoutBtn');if(lo)lo.addEventListener('click',signOut);
     var cs2=$('#cancelSub');
@@ -1114,7 +1116,7 @@ function initAdmin(){
           var bt=this;bt.disabled=true;bt.textContent='辨識中…';
           var ok=await transcribeEssay(id,function(m){bt.textContent=m});
           if(ok){var rr=await sb.from('essays').select('transcript,transcript_engine').eq('id',id).maybeSingle();if(rr.data){$('#gTx').value=rr.data.transcript||'';e.transcript=rr.data.transcript;e.transcript_status='done';e.transcript_engine=rr.data.transcript_engine}}
-          else $('#gErr').textContent='辨識暫時失敗,請稍後再試。';
+          else $('#gErr').textContent='這張照片無法自動辨識(手寫稿紙格線容易造成錯字),請直接看照片批改。';
           bt.disabled=false;bt.textContent='重新辨識';
         });
         $('#gFile').addEventListener('change',function(){fpick=[];var er=$('#gErr');er.textContent='';Array.prototype.forEach.call(this.files,function(f){var m=checkFile(f,fpick);if(m){er.textContent=m;return}fpick.push(f)})});
