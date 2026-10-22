@@ -375,7 +375,7 @@ $$('[data-add]').forEach(function(b){b.addEventListener('click',function(e){e.pr
 
 /* ================= 正式版:接上 Supabase(登入、報名、付款、作文、後台) ================= */
 var sb=null,U=null,MEM=null,ENR={},CLAIMED={},ready=false;
-var PUB={products:{},courses:{},plans:{},resources:{},pay:false};
+var PUB={products:{},courses:{},plans:{},resources:{},pay:false,liveDays:90};
 var INTENT={};
 var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms)})};
 var isAdmin=function(){return !!(U&&U.role==='admin')};
@@ -462,13 +462,43 @@ async function loadMine(){
   (rs[1].data||[]).forEach(function(x){ENR[x.course_id]=true});
   (rs[2].data||[]).forEach(function(x){CLAIMED[x.resource_id]=true});
 }
+
+/* ---- 教材內容(封面、簡介、特色、目錄、內頁圖):資料庫有值就蓋過內建預設 ---- */
+function mediaUrl(p){
+  if(/^(images\/|https?:)/.test(p))return p;
+  return String((GW.config&&GW.config.supabaseUrl)||'').replace(/\/$/,'')+'/storage/v1/object/public/product-media/'+String(p).split('/').map(encodeURIComponent).join('/');
+}
+function galHtml(items){
+  return items.map(function(it){var u=mediaUrl(it.src||it.path),c=it.cap||'';
+    return '<figure><img src="'+esc(u)+'" alt="'+esc(c)+'" loading="lazy">'+(c?'<figcaption>'+esc(c)+'</figcaption>':'')+'</figure>'}).join('');
+}
+function tocHtml(rows){
+  return rows.map(function(t){return t[1]?'<li><span>'+esc(t[0])+'</span><i>'+esc(t[1])+'</i></li>':'<li class="grp">'+esc(t[0])+'</li>'}).join('');
+}
+function applyProductContent(){
+  Object.keys(PUB.products).forEach(function(id){
+    var r=PUB.products[id],g=byId(GW.products,id),e;
+    if(r.cover_path){
+      if(g)g.coverUrl=mediaUrl(r.cover_path);
+      $$('img[data-pimg="'+id+'"]').forEach(function(im){im.src=mediaUrl(r.cover_path)});
+    }
+    if(r.intro&&(e=$('[data-pintro="'+id+'"]')))e.textContent=r.intro;
+    if(Array.isArray(r.feats)&&r.feats.length&&(e=$('[data-pfeats="'+id+'"]')))
+      e.innerHTML=r.feats.map(function(x){return '<li>'+esc(x)+'</li>'}).join('');
+    if(Array.isArray(r.toc)&&r.toc.length&&(e=$('[data-ptoc="'+id+'"]')))e.innerHTML=tocHtml(r.toc);
+    if(Array.isArray(r.gallery)){
+      var w=$('[data-pgalwrap="'+id+'"]'),gl=$('[data-pgal="'+id+'"]');
+      if(w&&gl){gl.innerHTML=galHtml(r.gallery);w.hidden=!r.gallery.length}
+    }
+  });
+}
 function tagPrice(){
   $$('[data-price]').forEach(function(el){var p=byId(GW.products,el.getAttribute('data-price'));if(p)el.textContent=p.price.toLocaleString('en-US')});
 }
 async function loadPublic(){
   try{
     var rs=await Promise.all([
-      sb.from('products').select('id,price,active,kind'),sb.from('courses').select('id,price,status'),
+      sb.from('products').select('id,price,active,kind,cover_path,intro,feats,toc,gallery'),sb.from('courses').select('id,price,status'),
       sb.from('plans').select('id,name,amount,period_type,frequency,active'),sb.from('site_settings').select('key,value'),
       sb.from('resources').select('id,name,gate,storage_path,href')]);
     (rs[0].data||[]).forEach(function(r){PUB.products[r.id]=r;var p=byId(GW.products,r.id);if(p)p.price=r.price});
@@ -477,11 +507,12 @@ async function loadPublic(){
     (rs[4].data||[]).forEach(function(r){PUB.resources[r.id]=r});
     (rs[3].data||[]).forEach(function(r){
       if(r.key==='payments_enabled')PUB.pay=(r.value===true);
+      if(r.key==='live_retention_days'&&typeof r.value==='number')PUB.liveDays=r.value;
       if(r.key==='line_url'&&r.value)CONFIG.lineUrl=r.value;
       if(r.key==='youtube_url'&&r.value)CONFIG.youtubeUrl=r.value;
     });
   }catch(e){}
-  tagPrice();
+  tagPrice();applyProductContent();
   Object.keys(PUB.products).forEach(function(id){
     if(!PUB.products[id].active)$$('[data-add="'+id+'"]').forEach(function(b){b.classList.add('off');b.setAttribute('title','暫時無法購買')});
   });
@@ -549,24 +580,89 @@ function initMembership(){
 }
 
 /* ---------- 直播專區 ---------- */
+function liveStatus(e){
+  if(!e.starts_at)return 'live';
+  var t=new Date(e.starts_at).getTime(),n=Date.now();
+  if(n<t-30*6e4)return 'soon';
+  return n<=t+3*36e5?'live':'replay';
+}
+var LIVE_ST={soon:'即將開始',live:'直播中',replay:'回放'};
 function initLive(){
   var box=$('#liveMember');if(!box)return;
+  var cur=null,items=[];
+  function liveSrc(it){return it.url}
+  function drawPlayer(){
+    var p=$('#livePlayer');if(!p)return;
+    var it=items.filter(function(x){return x.e.id===cur})[0];
+    if(!it){p.innerHTML='<p class="mfoot">目前沒有可以觀看的場次。</p>';return}
+    var y=ytId(it.url),ok=false;try{ok=/^https?:$/.test(new URL(it.url).protocol)}catch(e){}
+    var mem=it.e.kind==='member';
+    var wm='';if(mem&&U){var t=esc(U.email||U.name||'會員');wm='<div class="lwm" aria-hidden="true">'+new Array(16).join('<span>'+t+'</span>')+'</div>'}
+    p.innerHTML='<div class="lframe" id="lframe">'+(y?'<iframe src="https://www.youtube-nocookie.com/embed/'+encodeURIComponent(y)+'?rel=0&modestbranding=1&playsinline=1'+(mem?'&fs=0':'')+'" title="'+esc(it.e.title)+'" allow="accelerometer; encrypted-media; picture-in-picture'+(mem?'':'; fullscreen')+'"'+(mem?'':' allowfullscreen')+' referrerpolicy="strict-origin-when-cross-origin"></iframe>':'<div class="lframe-alt">'+(ok&&!mem?'<a class="btn btn-gold" target="_blank" rel="noopener noreferrer" href="'+esc(it.url)+'">前往觀看</a>':'<p class="mfoot">這個場次的網址不是 YouTube,請聯絡老師。</p>')+'</div>')+wm+'</div>'+
+      '<div class="lmeta"><h3>'+esc(it.e.title)+'</h3><p>'+(mem?'會員限定':'公開')+'・'+LIVE_ST[it.st]+(it.e.starts_at?'・'+esc(fmtDT(it.e.starts_at)):'')+'</p>'+(mem?'<p class="note">畫面會顯示你的帳號作為浮水印,請不要轉傳或錄影外流。<button type="button" class="btn btn-line sm" data-lfs>全螢幕</button></p>':'')+'</div>';
+    var fb=$('[data-lfs]',p);if(fb)fb.addEventListener('click',function(){var f=$('#lframe');try{(f.requestFullscreen||f.webkitRequestFullscreen).call(f)}catch(e){}});
+  }
+  function cardHtml(it){
+    var e=it.e,meta='<span class="lb'+(e.kind==='member'?' lb-m':'')+'">'+(e.kind==='member'?'會員限定':'公開')+'</span><span class="lb lb-'+it.st+'">'+LIVE_ST[it.st]+'</span>'+(e.starts_at?'<span class="ld">'+esc(fmtDT(e.starts_at))+'</span>':'');
+    if(it.locked)return '<a class="lev locked" href="membership.html"><span class="lt">'+esc(e.title)+'</span><span class="lm">'+meta+'</span><span class="lk">加入付費會員後觀看</span></a>';
+    return '<button type="button" class="lev'+(cur===e.id?' on':'')+'" data-lev="'+e.id+'" aria-pressed="'+(cur===e.id)+'"><span class="lt">'+esc(e.title)+'</span><span class="lm">'+meta+'</span></button>';
+  }
+  function drawList(){
+    var act=items.filter(function(x){return x.st!=='replay'}),rep=items.filter(function(x){return x.st==='replay'});
+    var h='';
+    if(act.length)h+='<h3 class="lh">直播</h3><div class="llist">'+act.map(cardHtml).join('')+'</div>';
+    if(rep.length)h+='<h3 class="lh">回放</h3><div class="llist">'+rep.map(cardHtml).join('')+'</div>';
+    var l=$('#liveList');l.innerHTML=h;
+    $$('[data-lev]',l).forEach(function(b){b.addEventListener('click',function(){recheck();cur=+b.getAttribute('data-lev');drawList();drawPlayer();var pl=$('#livePlayer');if(pl&&pl.scrollIntoView)pl.scrollIntoView({block:'nearest',behavior:'smooth'})})});
+  }
+  async function board(){
+    var wrap=$('#liveBoard'),body=$('#liveBoardBody');if(!wrap||!ready||!sb)return;
+    var er=await sb.from('live_events').select('id,title,starts_at,created_at,kind,public_url,replay_url').order('starts_at',{ascending:false,nullsFirst:true}).limit(60);
+    var days=PUB.liveDays,evs=(er.data||[]).filter(function(e){
+      if(!(days>0))return true;var t=new Date(e.starts_at||e.created_at).getTime();return !(t<Date.now()-days*864e5)});
+    var can=isMember()||isAdmin(),lm={};
+    if(can&&evs.length){var lr=await sb.from('live_links').select('event_id,url,replay_url').in('event_id',evs.map(function(e){return e.id}));(lr.data||[]).forEach(function(x){lm[x.event_id]=x})}
+    items=[];
+    evs.forEach(function(e){
+      var st=liveStatus(e),url=null,locked=false;
+      if(e.kind==='public'){url=(st==='replay'&&e.replay_url)||e.public_url;if(!url)return}
+      else if(can){var l=lm[e.id];if(!l)return;url=(st==='replay'&&l.replay_url)||l.url}
+      else locked=true;
+      items.push({e:e,st:st,url:url,locked:locked});
+    });
+    var act=items.filter(function(x){return x.st!=='replay'}).sort(function(a,b){return new Date(a.e.starts_at||0)-new Date(b.e.starts_at||0)});
+    var rep=items.filter(function(x){return x.st==='replay'});
+    items=act.concat(rep);
+    wrap.hidden=!items.length;
+    if(!items.length)return;
+    var ok=items.filter(function(x){return !x.locked});
+    if(!ok.some(function(x){return x.e.id===cur}))cur=ok.length?ok[0].e.id:null;
+    body.innerHTML='<div class="lboard"><div id="livePlayer" class="lplay" aria-live="polite"></div><div id="liveList" class="lsel"></div></div>';
+    drawList();drawPlayer();
+  }
   async function render(){
     if(!ready)return;
     if(!(isMember()||isAdmin())){
       box.innerHTML='<h3>會員限定直播</h3><p>只開放給付費會員。尚未加入的人看不到直播連結。</p><a class="btn btn-gold" href="membership.html">了解付費會員 '+ico('i-arrow')+'</a><p class="note">在本網站付款,付款成功後自動開通。</p>';return;
     }
-    box.innerHTML='<h3>會員限定直播</h3><p>讀取中…</p>';
-    var ev=await sb.from('live_events').select('id,title,starts_at').order('starts_at',{ascending:false,nullsFirst:false}).limit(5);
-    var ids=(ev.data||[]).map(function(x){return x.id});
-    var lk=ids.length?await sb.from('live_links').select('event_id,url').in('event_id',ids):{data:[]};
-    var map={};(lk.data||[]).forEach(function(x){map[x.event_id]=x.url});
-    var cur=(ev.data||[]).filter(function(x){return map[x.id]})[0];
-    if(!cur){box.innerHTML='<h3>會員限定直播</h3><p>你可以收看會員直播。目前老師還沒有放上直播連結,開播前會在這裡更新。</p>';return}
-    box.innerHTML='<h3>會員限定直播</h3><p>'+esc(cur.title)+(cur.starts_at?'・'+esc(fmtDT(cur.starts_at)):'')+'</p><a class="btn btn-gold" id="enterLive" target="_blank" rel="noopener noreferrer">進入會員直播 '+ico('i-arrow')+'</a><p class="note">請不要把直播連結轉傳給他人。</p>';
-    var a=$('#enterLive');try{var u=new URL(map[cur.id]);if(/^https?:$/.test(u.protocol))a.href=u.href}catch(e){a.removeAttribute('target')}
+    box.innerHTML='<h3>會員限定直播</h3><p>你是付費會員,可以直接在下方「直播與回放」觀看會員場次與回放。</p><a class="btn btn-gold" href="#liveBoard">前往觀看 '+ico('i-arrow')+'</a><p class="note">請不要把直播連結轉傳給他人。</p>';
   }
-  onAuth.push(render);render();
+  /* 站內保障:定期重新向資料庫確認會員資格,過期或被老師停用就立刻收掉會員播放器 */
+  var rcBusy=false;
+  async function recheck(){
+    if(rcBusy||!ready||!U||!sb)return;rcBusy=true;
+    try{
+      var was=isMember()||isAdmin(),r=await sb.from('profiles').select('role').eq('id',U.id).maybeSingle();
+      if(r&&r.data)U.role=r.data.role;
+      await loadMine();
+      if(was!==(isMember()||isAdmin())){render();board()}
+    }catch(e){}
+    rcBusy=false;
+  }
+  setInterval(recheck,3*60*1000);
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)recheck()});
+  window.addEventListener('focus',recheck);
+  onAuth.push(function(){render();board()});render();board();
 }
 
 /* ---------- 課程資訊 ---------- */
@@ -687,7 +783,7 @@ function initCart(){
     var gone=ids.filter(function(id){return PUB.products[id]&&!PUB.products[id].active});
     var needShip=ids.some(function(id){return !PUB.products[id]||PUB.products[id].kind==='physical'});
     app.innerHTML='<div class="cp"><div class="cp-list" id="cpl">'+ids.map(function(id){var p=byId(GW.products,id);
-      return '<div class="ci"><a href="'+p.url+'"><img src="images/'+p.cover+'" alt="'+esc(p.title)+' 封面"></a><div><b>'+esc(p.name)+'</b><small>'+money(p.price)+'</small><div class="qty"><button type="button" data-dec="'+id+'" aria-label="減少數量">−</button><span>'+S.cart[id]+'</span><button type="button" data-inc="'+id+'" aria-label="增加數量">+</button></div></div><button type="button" class="rm" data-rm="'+id+'">移除</button></div>'}).join('')+
+      return '<div class="ci"><a href="'+p.url+'"><img src="'+esc(p.coverUrl||('images/'+p.cover))+'" alt="'+esc(p.title)+' 封面"></a><div><b>'+esc(p.name)+'</b><small>'+money(p.price)+'</small><div class="qty"><button type="button" data-dec="'+id+'" aria-label="減少數量">−</button><span>'+S.cart[id]+'</span><button type="button" data-inc="'+id+'" aria-label="增加數量">+</button></div></div><button type="button" class="rm" data-rm="'+id+'">移除</button></div>'}).join('')+
       '</div><aside class="cp-sum"><h2>訂單摘要</h2>'+ids.map(function(id){var p=byId(GW.products,id);return '<div class="row"><span>'+esc(p.name)+' × '+S.cart[id]+'</span><span>'+money(p.price*S.cart[id])+'</span></div>'}).join('')+'<div class="row total"><span>合計</span><span>'+money(cartSum())+'</span></div>'+
       (needShip&&PUB.pay?'<div class="rcpt"><h3>收件資料</h3><label class="fld" for="rName">收件人<input id="rName" autocomplete="name" maxlength="30" value="'+esc(rc.name||'')+'"></label><label class="fld" for="rPhone">手機<input id="rPhone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" value="'+esc(rc.phone||'')+'"></label><label class="fld" for="rAddr">收件地址<input id="rAddr" autocomplete="street-address" maxlength="120" value="'+esc(rc.address||'')+'"></label></div>':'')+
       (PUB.pay?'<label class="fld" for="rNote">備註(選填)<input id="rNote" maxlength="100" value="'+esc(rc.note||'')+'"></label>':'')+
@@ -1199,17 +1295,122 @@ function initAdmin(){
   };
 
   /* --- 教材 --- */
+  /* 圖片先在瀏覽器縮小再上傳(長邊 max 像素,JPEG),手機直接拍的大圖也能傳 */
+  function shrinkImage(file,max){
+    return new Promise(function(res,rej){
+      var im=new Image(),u=URL.createObjectURL(file);
+      im.onload=function(){
+        var w=im.naturalWidth,h=im.naturalHeight,k=Math.min(1,max/Math.max(w,h)),c=document.createElement('canvas');
+        c.width=Math.max(1,Math.round(w*k));c.height=Math.max(1,Math.round(h*k));
+        var x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);
+        URL.revokeObjectURL(u);c.toBlob(function(b){b?res(b):rej(new Error('encode'))},'image/jpeg',.88);
+      };
+      im.onerror=function(){URL.revokeObjectURL(u);rej(new Error('decode'))};
+      im.src=u;
+    });
+  }
+  function tocToText(rows){return (rows||[]).map(function(t){return t[1]?t[0]+' | '+t[1]:t[0]}).join('\n')}
+  function textToToc(t){
+    return String(t||'').split('\n').map(function(l){return l.trim()}).filter(Boolean).map(function(l){
+      var i=l.lastIndexOf('|');return i<0?[l,'']:[l.slice(0,i).trim(),l.slice(i+1).trim()];
+    });
+  }
+  function linesToList(t){return String(t||'').split('\n').map(function(l){return l.trim()}).filter(Boolean)}
+  var same=function(a,b){return JSON.stringify(a)===JSON.stringify(b)};
+
   TABS.p=async function(body){
-    var r=await sb.from('products').select('id,kind,name,price,active,sort').order('sort');
-    var rows=r.data||[];
+    var r=await sb.from('products').select('*').order('sort');
+    var rows=r.data||[],EDS={};
     body.innerHTML='<div class="twrap"><table class="tbl"><thead><tr><th>教材</th><th>售價(NT$)</th><th>類型</th><th>上架</th><th></th></tr></thead><tbody>'+rows.map(function(p){
-      return '<tr data-prow="'+esc(p.id)+'"><td>'+esc(p.name)+'</td><td><input type="number" min="0" step="10" value="'+p.price+'" data-f="price" style="width:90px"></td><td><select data-f="kind"><option value="physical"'+(p.kind==='physical'?' selected':'')+'>實體書(需寄送)</option><option value="digital"'+(p.kind==='digital'?' selected':'')+'>電子檔</option></select></td><td><input type="checkbox" data-f="active"'+(p.active?' checked':'')+' aria-label="上架"></td><td><button type="button" class="btn btn-line sm" data-save="'+esc(p.id)+'">儲存</button></td></tr>'}).join('')+'</tbody></table></div><p class="mfoot">價格會立刻套用到網站與結帳。已付款的舊訂單金額不受影響。</p>';
+      return '<tr data-prow="'+esc(p.id)+'"><td>'+esc(p.name)+'</td><td><input type="number" min="0" step="10" value="'+p.price+'" data-f="price" style="width:90px"></td><td><select data-f="kind"><option value="physical"'+(p.kind==='physical'?' selected':'')+'>實體書(需寄送)</option><option value="digital"'+(p.kind==='digital'?' selected':'')+'>電子檔</option></select></td><td><input type="checkbox" data-f="active"'+(p.active?' checked':'')+' aria-label="上架"></td><td class="pact2"><button type="button" class="btn btn-line sm" data-save="'+esc(p.id)+'">儲存</button> <button type="button" class="btn btn-line sm" data-edit="'+esc(p.id)+'" aria-expanded="false">編輯內容與圖片</button></td></tr>'+
+        '<tr data-erow="'+esc(p.id)+'" hidden><td colspan="5"></td></tr>'}).join('')+'</tbody></table></div><p class="mfoot">價格會立刻套用到網站與結帳。已付款的舊訂單金額不受影響。「編輯內容與圖片」可以自己換封面、改簡介、特色與目錄,以及上傳內頁圖。</p>';
     $$('[data-save]',body).forEach(function(b){b.addEventListener('click',async function(){
       var tr=b.closest('tr'),price=parseInt($('[data-f=price]',tr).value,10);
       if(!(price>=0)){toast('請輸入正確的價格');return}
       var u=await sb.from('products').update({price:price,kind:$('[data-f=kind]',tr).value,active:$('[data-f=active]',tr).checked}).eq('id',b.getAttribute('data-save'));
       toast(u.error?'儲存失敗:'+niceErr(u.error):'已儲存');
     })});
+    $$('[data-edit]',body).forEach(function(b){b.addEventListener('click',function(){
+      var id=b.getAttribute('data-edit'),er=$('[data-erow="'+id+'"]',body),open=er.hidden;
+      er.hidden=!open;b.setAttribute('aria-expanded',String(open));
+      if(open&&!EDS[id])openEditor(id,er.firstChild);
+    })});
+
+    function openEditor(id,host){
+      var db=rows.filter(function(x){return x.id===id})[0],g=byId(GW.products,id);
+      var D={intro:g.intro,feats:g.feats,toc:g.toc,gallery:g.extra.map(function(x){return {src:'images/'+x[0],cap:x[1]}})};
+      var S={cover:db.cover_path||null,gallery:Array.isArray(db.gallery)?db.gallery.map(function(x){return Object.assign({},x)}):D.gallery.map(function(x){return Object.assign({},x)})};
+      var orig=[db.cover_path].concat((Array.isArray(db.gallery)?db.gallery:[]).map(function(x){return x.path})).filter(Boolean);
+      EDS[id]=S;
+      host.innerHTML='<div class="ped">'+
+        '<div class="ped-row"><div class="ped-cov"><b>封面圖</b><img data-ecov alt="目前封面"><label class="btn btn-line sm ped-up">上傳新封面<input type="file" accept="image/*" data-efile="cover" hidden></label><small>建議直式、比例約 7:10;太大的圖會自動縮小。</small></div>'+
+        '<div class="ped-txt"><label class="fld">內容簡介<textarea data-e="intro" rows="3"></textarea></label>'+
+        '<label class="fld">本書特色(一行一點)<textarea data-e="feats" rows="6"></textarea></label></div></div>'+
+        '<label class="fld">內容目錄(一行一項,格式:標題 | 頁碼。沒有頁碼的行會當作章節標題)<textarea data-e="toc" rows="12"></textarea></label>'+
+        '<div class="ped-gal"><b>內頁與介紹圖</b><div data-egal></div><label class="btn btn-line sm ped-up">新增圖片(可一次選多張)<input type="file" accept="image/*" multiple data-efile="gal" hidden></label></div>'+
+        '<div class="ped-act"><button type="button" class="btn btn-fill sm" data-esave>儲存內容</button> <button type="button" class="btn btn-line sm" data-ereset>還原為預設內容</button><span class="mfoot" data-emsg></span></div></div>';
+      var $e=function(sel){return $(sel,host)};
+      $e('[data-e=intro]').value=db.intro!=null?db.intro:D.intro;
+      $e('[data-e=feats]').value=(Array.isArray(db.feats)?db.feats:D.feats).join('\n');
+      $e('[data-e=toc]').value=tocToText(Array.isArray(db.toc)?db.toc:D.toc);
+      function drawCover(){$e('[data-ecov]').src=S.cover?mediaUrl(S.cover):'images/'+g.cover}
+      function drawGal(){
+        var box=$e('[data-egal]');
+        box.innerHTML=S.gallery.length?S.gallery.map(function(it,i){
+          return '<div class="ped-g" data-gi="'+i+'"><img src="'+esc(mediaUrl(it.src||it.path))+'" alt=""><input type="text" data-gcap value="'+esc(it.cap||'')+'" placeholder="圖片說明(可留空)" aria-label="圖片說明">'+
+            '<span><button type="button" class="btn btn-line sm" data-gup aria-label="上移">↑</button><button type="button" class="btn btn-line sm" data-gdn aria-label="下移">↓</button><button type="button" class="btn btn-line sm" data-grm>移除</button></span></div>'}).join(''):'<p class="mfoot">目前沒有內頁圖。</p>';
+        $$('[data-gi]',box).forEach(function(row){
+          var i=parseInt(row.getAttribute('data-gi'),10);
+          $('[data-gcap]',row).addEventListener('input',function(){S.gallery[i].cap=this.value});
+          $('[data-gup]',row).addEventListener('click',function(){if(i>0){var t=S.gallery[i];S.gallery[i]=S.gallery[i-1];S.gallery[i-1]=t;drawGal()}});
+          $('[data-gdn]',row).addEventListener('click',function(){if(i<S.gallery.length-1){var t=S.gallery[i];S.gallery[i]=S.gallery[i+1];S.gallery[i+1]=t;drawGal()}});
+          $('[data-grm]',row).addEventListener('click',function(){S.gallery.splice(i,1);drawGal()});
+        });
+      }
+      async function up(file,kind,max){
+        var blob;try{blob=await shrinkImage(file,max)}catch(_){toast('這張圖片無法讀取,請改用 JPG 或 PNG');return null}
+        var path=id+'/'+kind+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.jpg';
+        var u=await sb.storage.from('product-media').upload(path,blob,{contentType:'image/jpeg',upsert:false});
+        if(u.error){toast('上傳失敗:'+niceErr(u.error));return null}
+        return path;
+      }
+      $e('[data-efile=cover]').addEventListener('change',async function(){
+        var f=this.files&&this.files[0];this.value='';if(!f)return;
+        var p=await up(f,'cover',1200);if(p){S.cover=p;drawCover();$e('[data-emsg]').textContent='封面已上傳,按「儲存內容」後才會套用到網站。'}
+      });
+      $e('[data-efile=gal]').addEventListener('change',async function(){
+        var fs=Array.prototype.slice.call(this.files||[]);this.value='';
+        for(var i=0;i<fs.length;i++){var p=await up(fs[i],'gal',1800);if(p)S.gallery.push({path:p,cap:''})}
+        drawGal();if(fs.length)$e('[data-emsg]').textContent='圖片已上傳,按「儲存內容」後才會套用到網站。';
+      });
+      $e('[data-esave]').addEventListener('click',async function(){
+        var intro=$e('[data-e=intro]').value.trim(),feats=linesToList($e('[data-e=feats]').value),toc=textToToc($e('[data-e=toc]').value);
+        var patch={
+          cover_path:S.cover||null,
+          intro:(!intro||intro===D.intro)?null:intro,
+          feats:(!feats.length||same(feats,D.feats))?null:feats,
+          toc:(!toc.length||same(toc,D.toc))?null:toc,
+          gallery:same(S.gallery,D.gallery)?null:S.gallery.map(function(x){return x.path?{path:x.path,cap:x.cap||''}:{src:x.src,cap:x.cap||''}})
+        };
+        var u=await sb.from('products').update(patch).eq('id',id);
+        if(u.error){toast('儲存失敗:'+niceErr(u.error));return}
+        Object.assign(db,patch);
+        var keep=[patch.cover_path].concat((patch.gallery||[]).map(function(x){return x.path})).filter(Boolean);
+        var gone=orig.filter(function(p){return keep.indexOf(p)<0});
+        if(gone.length){try{await sb.storage.from('product-media').remove(gone)}catch(_){}}
+        orig=keep;
+        toast('已儲存,網站教材頁會立刻更新');$e('[data-emsg]').textContent='';
+      });
+      $e('[data-ereset]').addEventListener('click',async function(){
+        if(!window.confirm('要把「'+g.name+'」的封面、簡介、特色、目錄與內頁圖全部還原成網站內建的內容嗎?')){return}
+        var u=await sb.from('products').update({cover_path:null,intro:null,feats:null,toc:null,gallery:null}).eq('id',id);
+        if(u.error){toast('還原失敗:'+niceErr(u.error));return}
+        if(orig.length){try{await sb.storage.from('product-media').remove(orig)}catch(_){}}
+        Object.assign(db,{cover_path:null,intro:null,feats:null,toc:null,gallery:null});delete EDS[id];
+        openEditor(id,host);toast('已還原為預設內容');
+      });
+      drawCover();drawGal();
+    }
   };
 
   /* --- 課程 --- */
@@ -1251,35 +1452,64 @@ function initAdmin(){
 
   /* --- 直播 --- */
   TABS.l=async function(body){
-    var er=await sb.from('live_events').select('id,title,starts_at').order('starts_at',{ascending:false,nullsFirst:false}).limit(30);
+    try{await sb.rpc('purge_old_live')}catch(_){}
+    var er=await sb.from('live_events').select('id,title,starts_at,kind,public_url,replay_url').order('starts_at',{ascending:false,nullsFirst:true}).limit(60);
     var ids=(er.data||[]).map(function(x){return x.id});
-    var lr=ids.length?await sb.from('live_links').select('event_id,url').in('event_id',ids):{data:[]};
-    var lm={};(lr.data||[]).forEach(function(x){lm[x.event_id]=x.url});
-    body.innerHTML='<form id="lForm" novalidate style="margin-bottom:18px"><h3>新增會員直播</h3><div class="row2"><label class="fld" for="lTitle">標題<input id="lTitle" maxlength="80" placeholder="例如:10/30 學測國寫衝刺直播"></label><label class="fld" for="lAt">開播時間<input id="lAt" type="datetime-local"></label></div><label class="fld" for="lUrl">會員直播連結(YouTube)<input id="lUrl" placeholder="https://youtube.com/live/…"></label><div class="err" id="lErr" role="alert"></div><button class="btn btn-fill" type="submit">新增</button></form>'+
-      '<div class="twrap"><table class="tbl"><thead><tr><th>標題</th><th>開播</th><th>會員連結</th><th></th></tr></thead><tbody>'+(er.data||[]).map(function(e){
-        return '<tr data-ev="'+e.id+'"><td>'+esc(e.title)+'</td><td>'+(e.starts_at?esc(fmtDT(e.starts_at)):'')+'</td><td><input data-f="url" value="'+esc(lm[e.id]||'')+'" style="min-width:220px"></td><td><button type="button" class="btn btn-line sm" data-lsave="'+e.id+'">儲存連結</button> <button type="button" class="btn btn-line sm" data-ldel="'+e.id+'">刪除</button></td></tr>'}).join('')+((er.data||[]).length?'':'<tr><td colspan="4" class="none">還沒有直播</td></tr>')+'</tbody></table></div><p class="mfoot">連結只有付費會員(與老師)看得到。公開直播請在「設定」填入 YouTube 頻道網址。</p>';
+    var lr=ids.length?await sb.from('live_links').select('event_id,url,replay_url').in('event_id',ids):{data:[]};
+    var lm={};(lr.data||[]).forEach(function(x){lm[x.event_id]=x});
+    var sr=await sb.from('site_settings').select('key,value').eq('key','live_retention_days');
+    var days=(sr.data&&sr.data[0]&&typeof sr.data[0].value==='number')?sr.data[0].value:90;
+    var loc=function(t){if(!t)return '';var d=new Date(t);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16)};
+    body.innerHTML='<form id="lForm" novalidate style="margin-bottom:18px"><h3>新增直播</h3><div class="row2"><label class="fld" for="lKind">類型<select id="lKind"><option value="member">會員限定</option><option value="public">公開(所有人可看)</option></select></label><label class="fld" for="lAt">開播時間<input id="lAt" type="datetime-local"></label></div><label class="fld" for="lTitle">標題<input id="lTitle" maxlength="80" placeholder="例如:10/30 學測國寫衝刺直播"></label><label class="fld" for="lUrl">直播網址(YouTube)<input id="lUrl" placeholder="https://youtube.com/live/…"></label><label class="fld" for="lRep">回放網址(選填。不填的話,直播結束後會沿用直播網址,YouTube 會自動變成回放)<input id="lRep" placeholder="https://youtu.be/…"></label><div class="err" id="lErr" role="alert"></div><button class="btn btn-fill" type="submit">新增</button></form>'+
+      '<div class="twrap"><table class="tbl"><thead><tr><th>類型</th><th>標題</th><th>開播</th><th>直播網址</th><th>回放網址</th><th></th></tr></thead><tbody>'+(er.data||[]).map(function(e){
+        var u=e.kind==='public'?e.public_url:(lm[e.id]&&lm[e.id].url),rp=e.kind==='public'?e.replay_url:(lm[e.id]&&lm[e.id].replay_url);
+        return '<tr data-ev="'+e.id+'" data-kind="'+esc(e.kind||'member')+'"><td>'+(e.kind==='public'?'公開':'會員限定')+'</td><td>'+esc(e.title)+'</td><td><input type="datetime-local" data-f="at" value="'+esc(loc(e.starts_at))+'"></td><td><input data-f="url" value="'+esc(u||'')+'" style="min-width:200px"></td><td><input data-f="rep" value="'+esc(rp||'')+'" style="min-width:200px" placeholder="選填"></td><td><button type="button" class="btn btn-line sm" data-lsave="'+e.id+'">儲存</button> <button type="button" class="btn btn-line sm" data-ldel="'+e.id+'">刪除</button></td></tr>'}).join('')+((er.data||[]).length?'':'<tr><td colspan="6" class="none">還沒有直播</td></tr>')+'</tbody></table></div>'+
+      '<form id="lRet" class="fm" style="max-width:520px;margin-top:22px"><h3>自動刪除舊的直播紀錄</h3><label class="fld" for="lDays">直播紀錄保留天數(填 0 代表不自動刪除)<input id="lDays" type="number" min="0" max="3650" step="1" value="'+days+'" style="width:120px"></label><p class="mfoot">超過天數的直播紀錄(含回放網址)每天會自動刪除。只會刪除本網站上的紀錄,YouTube 上的影片不受影響。</p><button class="btn btn-line sm" type="submit" style="align-self:flex-start">儲存</button></form>';
     function okUrl(u){try{var x=new URL(u);return /^https?:$/.test(x.protocol)}catch(e){return false}}
+    function checkUrls(u,rp){
+      if(!okUrl(u))return '請貼上完整的直播網址(https://…)。';
+      if(!ytId(u))return '目前只支援 YouTube 網址。';
+      if(rp&&!okUrl(rp))return '回放網址格式不正確。';
+      if(rp&&!ytId(rp))return '回放網址目前只支援 YouTube。';
+      return '';
+    }
     $('#lForm').addEventListener('submit',async function(e){
-      e.preventDefault();var er2=$('#lErr'),t=$('#lTitle').value.trim(),u=$('#lUrl').value.trim(),at=$('#lAt').value;
+      e.preventDefault();var er2=$('#lErr'),t=$('#lTitle').value.trim(),u=$('#lUrl').value.trim(),rp=$('#lRep').value.trim(),at=$('#lAt').value,kind=$('#lKind').value;
       if(!t){er2.textContent='請填寫標題。';return}
-      if(!okUrl(u)){er2.textContent='請貼上完整的直播網址(https://…)。';return}
-      var ins=await sb.from('live_events').insert({title:t,starts_at:at?new Date(at).toISOString():null}).select('id').single();
+      var bad=checkUrls(u,rp);if(bad){er2.textContent=bad;return}
+      var row={title:t,kind:kind,starts_at:at?new Date(at).toISOString():null};
+      if(kind==='public'){row.public_url=u;row.replay_url=rp||null}
+      var ins=await sb.from('live_events').insert(row).select('id').single();
       if(ins.error){er2.textContent='新增失敗:'+niceErr(ins.error);return}
-      var lk=await sb.from('live_links').insert({event_id:ins.data.id,url:u});
-      if(lk.error){await sb.from('live_events').delete().eq('id',ins.data.id);er2.textContent='新增失敗:'+niceErr(lk.error);return}
+      if(kind==='member'){
+        var lk=await sb.from('live_links').insert({event_id:ins.data.id,url:u,replay_url:rp||null});
+        if(lk.error){await sb.from('live_events').delete().eq('id',ins.data.id);er2.textContent='新增失敗:'+niceErr(lk.error);return}
+      }
       toast('已新增直播');TABS.l(body);
     });
     $$('[data-lsave]',body).forEach(function(b){b.addEventListener('click',async function(){
-      var id=+b.getAttribute('data-lsave'),u=$('[data-f=url]',b.closest('tr')).value.trim();
-      if(!okUrl(u)){toast('請貼上完整的直播網址(https://…)');return}
-      var r2=await sb.from('live_links').upsert({event_id:id,url:u},{onConflict:'event_id'});
-      toast(r2.error?'儲存失敗:'+niceErr(r2.error):'已更新連結');
+      var tr=b.closest('tr'),id=+b.getAttribute('data-lsave'),kind=tr.getAttribute('data-kind'),u=$('[data-f=url]',tr).value.trim(),rp=$('[data-f=rep]',tr).value.trim(),at=$('[data-f=at]',tr).value;
+      var bad=checkUrls(u,rp);if(bad){toast(bad);return}
+      var patch={starts_at:at?new Date(at).toISOString():null};
+      if(kind==='public'){patch.public_url=u;patch.replay_url=rp||null}
+      var r1=await sb.from('live_events').update(patch).eq('id',id);
+      if(r1.error){toast('儲存失敗:'+niceErr(r1.error));return}
+      if(kind!=='public'){var r2=await sb.from('live_links').upsert({event_id:id,url:u,replay_url:rp||null},{onConflict:'event_id'});if(r2.error){toast('儲存失敗:'+niceErr(r2.error));return}}
+      toast('已更新');
     })});
     $$('[data-ldel]',body).forEach(function(b){b.addEventListener('click',async function(){
       if(b.getAttribute('data-ask')!=='1'){b.setAttribute('data-ask','1');b.textContent='再按一次刪除';return}
       var r2=await sb.from('live_events').delete().eq('id',+b.getAttribute('data-ldel'));
       if(r2.error)toast('刪除失敗:'+niceErr(r2.error));else TABS.l(body);
     })});
+    $('#lRet').addEventListener('submit',async function(e){
+      e.preventDefault();var n=parseInt($('#lDays').value,10);
+      if(!(n>=0&&n<=3650)){toast('請輸入 0 到 3650 之間的天數');return}
+      var r2=await sb.from('site_settings').upsert({key:'live_retention_days',value:n,updated_at:new Date().toISOString()},{onConflict:'key'});
+      if(r2.error){toast('儲存失敗:'+niceErr(r2.error));return}
+      try{await sb.rpc('purge_old_live')}catch(_){}
+      toast(n?'已儲存,超過 '+n+' 天的直播紀錄會自動刪除':'已儲存,不會自動刪除');TABS.l(body);
+    });
   };
 
   /* --- 設定 --- */

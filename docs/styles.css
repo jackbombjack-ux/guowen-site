@@ -966,6 +966,46 @@ img.sc.ir{position:absolute;inset:0;width:100%;height:100%}
 /* a11y: LINE 綠按鈕對比度 */
 .btn-line-green{background:#067A38;color:#fff}
 .btn-line-green:hover{background:#056530}
+/* 教材內容編輯器(後台) */
+.pact2{white-space:nowrap}
+.ped{display:grid;gap:14px;padding:14px 2px 18px;text-align:left;white-space:normal}
+.ped-row{display:grid;grid-template-columns:200px minmax(0,1fr);gap:18px;align-items:start}
+.ped-cov{display:grid;gap:8px;justify-items:start}
+.ped-cov img{width:160px;height:auto;aspect-ratio:700/990;object-fit:contain;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+.ped-cov small{color:var(--text-soft);font-size:12px}
+.ped-txt{display:grid;gap:12px;min-width:0}
+.ped textarea{width:100%;font:inherit;line-height:1.6}
+.ped-up{cursor:pointer}
+.ped-gal{display:grid;gap:10px}
+.ped-g{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--card)}
+.ped-g img{width:96px;height:64px;object-fit:cover;border-radius:6px}
+.ped-g input{min-width:0}
+.ped-g span{display:flex;gap:6px}
+.ped-act{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+@media(max-width:640px){.ped-row{grid-template-columns:1fr}.ped-g{grid-template-columns:72px minmax(0,1fr)}.ped-g img{width:72px}.ped-g span{grid-column:1/-1}}
+/* 直播與回放 */
+.lboard{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:20px;align-items:start}
+.lplay{min-width:0}
+.lframe{position:relative;aspect-ratio:16/9;background:#0e131b;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.lframe iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.lframe-alt{position:absolute;inset:0;display:grid;place-items:center}
+.lmeta{padding:12px 2px}
+.lmeta h3{font-family:var(--font-serif);font-weight:900;font-size:20px;letter-spacing:.05em}
+.lmeta p{font-size:14px;color:var(--text-soft);margin-top:4px}
+.lsel{display:grid;gap:8px;min-width:0;max-height:560px;overflow:auto}
+.lh{font-family:var(--font-serif);font-size:15px;letter-spacing:.1em;margin:6px 0 0;color:var(--text-soft)}
+.llist{display:grid;gap:8px}
+.lev{display:grid;gap:6px;text-align:left;width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:inherit;font:inherit;cursor:pointer;text-decoration:none}
+.lev:hover{border-color:var(--line-strong)}
+.lev.on{border-color:var(--bronze-text);box-shadow:var(--shadow-sm)}
+.lev .lt{font-weight:700;line-height:1.4}
+.lev .lm{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--text-soft)}
+.lev .lk{font-size:12.5px;color:var(--bronze-text)}
+.lev.locked{opacity:.85}
+.lb{display:inline-block;padding:1px 9px;border-radius:999px;border:1px solid var(--line-strong);font-size:12px}
+.lb-m{background:var(--bronze-text);border-color:var(--bronze-text);color:var(--bg)}
+.lb-live{background:#b3261e;border-color:#b3261e;color:#fff}
+@media(max-width:820px){.lboard{grid-template-columns:1fr}.lsel{max-height:none}}
 
 /* 多頁補充 */
 .hero-tag{font-family:var(--font-serif);font-weight:600;font-size:clamp(14px,1.6vw,17px);letter-spacing:.3em;color:var(--bronze-text);margin-bottom:14px}
@@ -1014,3 +1054,10 @@ img.sc.ir{position:absolute;inset:0;width:100%;height:100%}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .story img.logo-big.on-light{display:none}:root:not([data-theme="light"]) .story img.logo-big.on-dark{display:block}}
 :root[data-theme="dark"] .story img.logo-big.on-light{display:none}
 :root[data-theme="dark"] .story img.logo-big.on-dark{display:block}
+
+/* 會員直播浮水印 */
+.lwm{position:absolute;inset:-20%;display:flex;flex-wrap:wrap;gap:46px 56px;align-content:space-around;justify-content:space-around;transform:rotate(-18deg);pointer-events:none;user-select:none;z-index:2}
+.lwm span{color:#fff;opacity:.16;font-size:15px;font-weight:700;letter-spacing:.04em;text-shadow:0 0 2px rgba(0,0,0,.6);white-space:nowrap}
+.lframe:fullscreen{border-radius:0;border:0}
+.lframe:fullscreen .lwm span{font-size:20px}
+.lmeta .btn{margin-left:8px}
