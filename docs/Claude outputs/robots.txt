@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /admin.html
-Sitemap: https://chineses.win/sitemap.xml
