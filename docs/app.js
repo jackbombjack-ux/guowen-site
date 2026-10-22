@@ -587,6 +587,7 @@ function liveStatus(e){
   return n<=t+3*36e5?'live':'replay';
 }
 var LIVE_ST={soon:'即將開始',live:'直播中',replay:'回放'};
+var VIEWED={};
 function initLive(){
   var box=$('#liveMember');if(!box)return;
   var cur=null,items=[];
@@ -598,6 +599,7 @@ function initLive(){
     var y=ytId(it.url),ok=false;try{ok=/^https?:$/.test(new URL(it.url).protocol)}catch(e){}
     var mem=it.e.kind==='member';
     var wm='';if(mem&&U){var t=esc(U.email||U.name||'會員');wm='<div class="lwm" aria-hidden="true">'+new Array(16).join('<span>'+t+'</span>')+'</div>'}
+    if(mem&&!it.locked&&!isAdmin()&&!VIEWED[it.e.id]&&sb){VIEWED[it.e.id]=1;sb.rpc('log_live_view',{p_event:it.e.id}).then(function(){},function(){})}
     p.innerHTML='<div class="lframe" id="lframe">'+(y?'<iframe src="https://www.youtube-nocookie.com/embed/'+encodeURIComponent(y)+'?rel=0&modestbranding=1&playsinline=1'+(mem?'&fs=0':'')+'" title="'+esc(it.e.title)+'" allow="accelerometer; encrypted-media; picture-in-picture'+(mem?'':'; fullscreen')+'"'+(mem?'':' allowfullscreen')+' referrerpolicy="strict-origin-when-cross-origin"></iframe>':'<div class="lframe-alt">'+(ok&&!mem?'<a class="btn btn-gold" target="_blank" rel="noopener noreferrer" href="'+esc(it.url)+'">前往觀看</a>':'<p class="mfoot">這個場次的網址不是 YouTube,請聯絡老師。</p>')+'</div>')+wm+'</div>'+
       '<div class="lmeta"><h3>'+esc(it.e.title)+'</h3><p>'+(mem?'會員限定':'公開')+'・'+LIVE_ST[it.st]+(it.e.starts_at?'・'+esc(fmtDT(it.e.starts_at)):'')+'</p>'+(mem?'<p class="note">畫面會顯示你的帳號作為浮水印,請不要轉傳或錄影外流。<button type="button" class="btn btn-line sm" data-lfs>全螢幕</button></p>':'')+'</div>';
     var fb=$('[data-lfs]',p);if(fb)fb.addEventListener('click',function(){var f=$('#lframe');try{(f.requestFullscreen||f.webkitRequestFullscreen).call(f)}catch(e){}});
@@ -1112,12 +1114,22 @@ function initAdmin(){
     if(!ready){app.innerHTML='<div class="gate"><p>載入中…</p></div>';return}
     if(!U){app.innerHTML='<div class="gate"><h2>老師後台</h2><p>請使用老師的 Google 帳號登入。</p><button type="button" class="btn btn-fill" id="admLogin">使用 Google 帳號登入</button></div>';$('#admLogin').addEventListener('click',function(){askLogin('請用老師的 Google 帳號登入後台')});return}
     if(!isAdmin()){app.innerHTML='<div class="gate"><h2>沒有權限</h2><p>這個帳號('+esc(U.email)+')不是老師帳號。</p><a class="btn btn-line" href="member.html">回會員專區</a></div>';return}
-    app.innerHTML='<div class="tiles" id="tiles"></div><div class="tabs" role="tablist" style="max-width:860px">'+[['e','作文批改'],['o','訂單'],['m','會員'],['p','教材'],['c','課程'],['l','直播'],['s','設定']].map(function(t){return '<button type="button" role="tab" data-at="'+t[0]+'" aria-selected="'+(aTab===t[0])+'">'+t[1]+'</button>'}).join('')+'</div><div class="panel" id="aBody"><p>載入中…</p></div><p class="mfoot"><button type="button" class="more" id="admOut">登出</button></p>';
+    app.innerHTML='<div class="tiles" id="tiles"></div><div id="ocrAlert"></div><div class="tabs" role="tablist" style="max-width:860px">'+[['e','作文批改'],['o','訂單'],['m','會員'],['p','教材'],['c','課程'],['l','直播'],['s','設定']].map(function(t){return '<button type="button" role="tab" data-at="'+t[0]+'" aria-selected="'+(aTab===t[0])+'">'+t[1]+'</button>'}).join('')+'</div><div class="panel" id="aBody"><p>載入中…</p></div><p class="mfoot"><button type="button" class="more" id="admOut">登出</button></p>';
     $$('[data-at]',app).forEach(function(b){b.addEventListener('click',function(){aTab=b.getAttribute('data-at');render()})});
     $('#admOut').addEventListener('click',signOut);
-    tiles();
+    tiles();ocrAlert();
     var body=$('#aBody');
     try{await TABS[aTab](body)}catch(e){body.innerHTML='<p class="err">讀取失敗:'+esc(niceErr(e))+'</p>'}
+  }
+  async function ocrAlert(){
+    var h=$('#ocrAlert');if(!h)return;
+    try{
+      var r=await sb.rpc('ocr_status');if(r.error||!r.data)return;
+      var u=r.data.units,l=r.data.limit,pct=l>0?Math.round(u*100/l):0;
+      if(u>=l)h.innerHTML='<div class="ocrbar full" role="status"><b>本月 Google 文字辨識免費額度已用完</b>('+u+' / '+l+' 張)。新上傳的作文會自動改用瀏覽器簡易辨識,錯字會比較多,請直接看照片批改;每月 1 日(UTC)額度自動恢復。</div>';
+      else if(pct>=80)h.innerHTML='<div class="ocrbar warn" role="status"><b>本月 Google 文字辨識已用 '+pct+'%</b>('+u+' / '+l+' 張),快用完了。用完後會自動改用瀏覽器簡易辨識。</div>';
+      else h.innerHTML='';
+    }catch(e){}
   }
   async function tiles(){
     var c=await Promise.all([count('essays',function(q){return q.eq('status','pending')}),count('orders',function(q){return q.eq('status','paid').eq('fulfillment','to_ship')}),count('memberships',function(q){return q.eq('status','active')})]);
@@ -1464,6 +1476,7 @@ function initAdmin(){
       '<div class="twrap"><table class="tbl"><thead><tr><th>類型</th><th>標題</th><th>開播</th><th>直播網址</th><th>回放網址</th><th></th></tr></thead><tbody>'+(er.data||[]).map(function(e){
         var u=e.kind==='public'?e.public_url:(lm[e.id]&&lm[e.id].url),rp=e.kind==='public'?e.replay_url:(lm[e.id]&&lm[e.id].replay_url);
         return '<tr data-ev="'+e.id+'" data-kind="'+esc(e.kind||'member')+'"><td>'+(e.kind==='public'?'公開':'會員限定')+'</td><td>'+esc(e.title)+'</td><td><input type="datetime-local" data-f="at" value="'+esc(loc(e.starts_at))+'"></td><td><input data-f="url" value="'+esc(u||'')+'" style="min-width:200px"></td><td><input data-f="rep" value="'+esc(rp||'')+'" style="min-width:200px" placeholder="選填"></td><td><button type="button" class="btn btn-line sm" data-lsave="'+e.id+'">儲存</button> <button type="button" class="btn btn-line sm" data-ldel="'+e.id+'">刪除</button></td></tr>'}).join('')+((er.data||[]).length?'':'<tr><td colspan="6" class="none">還沒有直播</td></tr>')+'</tbody></table></div>'+
+      '<h3 style="margin-top:22px">會員直播觀看紀錄</h3><div id="lViews"><p class="mfoot">讀取中…</p></div>'+
       '<form id="lRet" class="fm" style="max-width:520px;margin-top:22px"><h3>自動刪除舊的直播紀錄</h3><label class="fld" for="lDays">直播紀錄保留天數(填 0 代表不自動刪除)<input id="lDays" type="number" min="0" max="3650" step="1" value="'+days+'" style="width:120px"></label><p class="mfoot">超過天數的直播紀錄(含回放網址)每天會自動刪除。只會刪除本網站上的紀錄,YouTube 上的影片不受影響。</p><button class="btn btn-line sm" type="submit" style="align-self:flex-start">儲存</button></form>';
     function okUrl(u){try{var x=new URL(u);return /^https?:$/.test(x.protocol)}catch(e){return false}}
     function checkUrls(u,rp){
@@ -1502,6 +1515,18 @@ function initAdmin(){
       var r2=await sb.from('live_events').delete().eq('id',+b.getAttribute('data-ldel'));
       if(r2.error)toast('刪除失敗:'+niceErr(r2.error));else TABS.l(body);
     })});
+    (async function(){
+      var box=$('#lViews');if(!box)return;
+      var mem=(er.data||[]).filter(function(e){return e.kind!=='public'});
+      var vr=mem.length?await sb.from('live_views').select('event_id,user_id,first_at,last_at,plays').in('event_id',mem.map(function(e){return e.id})):{data:[]};
+      var vs=vr.data||[],uids=[];vs.forEach(function(v){if(uids.indexOf(v.user_id)<0)uids.push(v.user_id)});
+      var pr=uids.length?await sb.from('profiles').select('id,name,email').in('id',uids):{data:[]},pm={};(pr.data||[]).forEach(function(x){pm[x.id]=x});
+      if(!mem.length){box.innerHTML='<p class="mfoot">還沒有會員限定直播。</p>';return}
+      box.innerHTML=mem.map(function(e){
+        var l=vs.filter(function(v){return v.event_id===e.id}).sort(function(a,b){return new Date(a.first_at)-new Date(b.first_at)});
+        return '<details class="lvw"><summary>'+esc(e.title)+(e.starts_at?'('+esc(fmtDT(e.starts_at))+')':'')+' <b>'+l.length+' 人觀看</b></summary>'+(l.length?'<ul>'+l.map(function(v){var p=pm[v.user_id]||{};return '<li>'+esc(p.name||'(未命名)')+' <span>'+esc(p.email||'')+'</span>・首次 '+esc(fmtDT(v.first_at))+'・共進入 '+v.plays+' 次</li>'}).join('')+'</ul>':'<p class="mfoot">還沒有人觀看。</p>')+'</details>';
+      }).join('')+'<p class="mfoot">只記錄付費會員打開會員場次的播放器;老師預覽不計入。直播紀錄被自動刪除時,觀看紀錄會一起刪除。</p>';
+    })();
     $('#lRet').addEventListener('submit',async function(e){
       e.preventDefault();var n=parseInt($('#lDays').value,10);
       if(!(n>=0&&n<=3650)){toast('請輸入 0 到 3650 之間的天數');return}
