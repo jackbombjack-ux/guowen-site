@@ -1073,3 +1073,47 @@ img.sc.ir{position:absolute;inset:0;width:100%;height:100%}
 .lvw summary{cursor:pointer}
 .lvw ul{margin:8px 0 0;padding-left:18px;display:grid;gap:4px;font-size:14px}
 .lvw li span{color:var(--text-soft)}
+
+/* =====================================================================
+   首頁開場序列 v2:載入動畫(LOGO)→ 山景漸漸浮現 → 左側內容 → 右側入口卡
+   ===================================================================== */
+@property --ldp{syntax:"<number>";inherits:false;initial-value:100}
+#loader{display:none}
+html.ld #loader{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:var(--paper,#F8F5EE);transition:opacity .75s ease,visibility .75s}
+html.ld.ld-out #loader{opacity:0;visibility:hidden}
+.ld-in{display:grid;justify-items:center;gap:28px;padding:24px}
+.ld-in .ld-logo{width:min(360px,66vw);height:auto;
+  -webkit-mask-image:linear-gradient(90deg,#000 calc(var(--ldp)*1%),transparent calc(var(--ldp)*1% + 16%));mask-image:linear-gradient(90deg,#000 calc(var(--ldp)*1%),transparent calc(var(--ldp)*1% + 16%));
+  animation:ldwipe 1.7s cubic-bezier(.35,.55,.25,1) .15s both}
+html.ld.ld-out .ld-logo{transform:scale(1.05);transition:transform .75s ease}
+.ld-bar{width:min(230px,52vw);height:2px;border-radius:2px;overflow:hidden;background:color-mix(in srgb,var(--text,#222) 14%,transparent)}
+.ld-bar i{display:block;height:100%;background:linear-gradient(90deg,#C79631,#F0D27A,#C79631);transform-origin:left center;animation:ldbar 2.1s cubic-bezier(.4,.1,.3,1) .2s both}
+@keyframes ldwipe{from{--ldp:-16;opacity:0;filter:blur(6px)}35%{opacity:1}to{--ldp:100;opacity:1;filter:none}}
+@keyframes ldbar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+/* 載入畫面還在時,首頁動畫先暫停,載入畫面淡出後才開始 */
+html.ld:not(.ld-out) .hero *,html.ld:not(.ld-out) .hero::before,html.ld:not(.ld-out) .hero *::before,html.ld:not(.ld-out) .hero *::after{animation-play-state:paused!important}
+
+/* 1) 山景:遠山 → 中山 → 近山,墨色由淡漸濃、由模糊轉清晰 */
+@keyframes inkin{from{opacity:0;filter:blur(16px) saturate(.6)}to{opacity:1;filter:none}}
+@keyframes inrise{from{transform:translateY(26px) scale(1.035)}to{transform:none}}
+@keyframes cloudin{from{opacity:0;margin-top:10px}}
+.hero.play .hero-fade{animation:fadein 1.6s ease .1s both}
+.hero.play .hl{animation:inkin 1.9s cubic-bezier(.3,.55,.25,1) both}
+.hero.play .hl .ir{animation:inrise 2.6s cubic-bezier(.2,.7,.2,1) both}
+.hero.play .hl0,.hero.play .hl0 .ir{animation-delay:.1s}
+.hero.play .hl1,.hero.play .hl1 .ir{animation-delay:.8s}
+.hero.play .hl2,.hero.play .hl2 .ir{animation-delay:1.5s}
+.hero.play .hero-art::before{animation:cloudin 1.4s ease 2.7s both}
+.hero.play .hero-art::after{animation:cloudin 1.4s ease 2.9s both}
+/* 2) 左側內容:山景結束後依序出現 */
+.hero.play .hero-tag{animation:up .8s ease 3.2s both}
+.hero.play .ch{animation:ink .9s cubic-bezier(.2,.7,.2,1) calc(3.4s + var(--i)*.07s) both}
+.hero.play .sub{animation:up .8s ease 4.3s both}
+.hero.play .cta{animation:up .8s ease 4.6s both}
+/* 3) 右側入口卡:左側完成後逐張出現 */
+.hero.play .qcard{animation:up .8s ease calc(5.3s + var(--q)*.16s) both}
+.hero.play .seal-stamp{animation:stamp .5s cubic-bezier(.3,1.6,.5,1) 6.5s both}
+@media (prefers-reduced-motion:reduce){
+  .hero.play .hero-art::before,.hero.play .hero-art::after{animation:none!important}
+  #loader{display:none!important}
+}

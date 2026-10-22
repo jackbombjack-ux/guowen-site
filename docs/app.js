@@ -355,6 +355,21 @@ $$('[data-scene]').forEach(function(el){
 });
 $$('[data-thumb]').forEach(function(el){var p=el.getAttribute('data-thumb').split(':');el.insertAdjacentHTML('afterbegin',thumb(+p[0],p[1]))});
 var heroArt=$('#heroArt');if(heroArt)heroArt.innerHTML=heroSVG();
+/* 首頁載入畫面(LOGO):資源載入完成且至少播完約 2 秒後淡出,再開始首頁動畫;同一分頁只播一次 */
+(function(){
+  var R=document.documentElement;if(!R.classList.contains('ld'))return;
+  var t0=Date.now(),done=false;
+  function fin(){
+    if(done)return;done=true;
+    setTimeout(function(){
+      R.classList.add('ld-out');
+      try{sessionStorage.setItem('gw-ld','1')}catch(e){}
+      setTimeout(function(){var l=$('#loader');if(l&&l.parentNode)l.parentNode.removeChild(l);R.classList.remove('ld','ld-out')},900);
+    },Math.max(0,2100-(Date.now()-t0)));
+  }
+  if(document.readyState==='complete')fin();else window.addEventListener('load',fin);
+  setTimeout(fin,7000);
+})();
 var rb=$('#replayBtn');if(rb)rb.addEventListener('click',function(){var h=$('#home');h.classList.remove('play');void h.offsetWidth;h.classList.add('play')});
 
 /* ---------- 購物車(狀態) ---------- */
