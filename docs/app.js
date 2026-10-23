@@ -1087,9 +1087,11 @@ function initMember(){
     }
     if(tab!=='e'){try{var ur=await sb.from('essays').select('id,status,student_seen_at').eq('student_id',U.id).eq('status','graded');UNSEEN=(ur.data||[]).filter(function(x){return !x.student_seen_at}).length}catch(_){UNSEEN=0}if(my!==rendering)return}
     var body='';
+    var ANN=[];
+    if(tab==='c'){try{var anr=await sb.from('announcements').select('id,title,body,created_at').gte('created_at',new Date(Date.now()-30*864e5).toISOString()).order('created_at',{ascending:false}).limit(3);ANN=anr.data||[]}catch(_){ANN=[]}if(my!==rendering)return}
     if(tab==='c'){
       var cs=Object.keys(ENR).map(function(id){var c=byId(GW.courses,id);return c?'<li><a href="'+c.learn+'">'+esc(c.name)+'</a><em>前往學習</em></li>':''}).join('')||'<li class="none">尚未報名課程。<a href="courses.html" style="text-decoration:underline;margin-left:6px">看看線上課程</a></li>';
-      body='<h2>我的課程</h2><ul class="mlist">'+cs+'</ul>';
+      body=(ANN.length?'<h2>最新公告</h2><ul class="mlist annlist">'+ANN.map(function(a){return '<li><span><b>'+esc(a.title)+'</b><br><small>'+esc(a.body)+'</small></span><em>'+fmtDate(a.created_at)+'</em></li>'}).join('')+'</ul>':'')+'<h2'+(ANN.length?' style="margin-top:22px"':'')+'>我的課程</h2><ul class="mlist">'+cs+'</ul>';
     }else if(tab==='e'){
       var es=await fetchMyEssays();if(my!==rendering)return;
       var fpaths=[];es.forEach(function(e){e.essay_files.forEach(function(f){fpaths.push(f.path)})});
@@ -1184,7 +1186,7 @@ function initAdmin(){
     if(!ready){app.innerHTML='<div class="gate"><p>載入中…</p></div>';return}
     if(!U){app.innerHTML='<div class="gate"><h2>老師後台</h2><p>請使用老師的 Google 帳號登入。</p><button type="button" class="btn btn-fill" id="admLogin">使用 Google 帳號登入</button></div>';$('#admLogin').addEventListener('click',function(){askLogin('請用老師的 Google 帳號登入後台')});return}
     if(!isAdmin()){app.innerHTML='<div class="gate"><h2>沒有權限</h2><p>這個帳號('+esc(U.email)+')不是老師帳號。</p><a class="btn btn-line" href="member.html">回會員專區</a></div>';return}
-    app.innerHTML='<div class="tiles" id="tiles"></div><div id="ocrAlert"></div><div class="tabs" role="tablist" style="max-width:860px">'+[['e','作文批改'],['o','訂單'],['m','會員'],['p','教材'],['c','課程'],['l','直播'],['s','設定']].map(function(t){return '<button type="button" role="tab" data-at="'+t[0]+'" aria-selected="'+(aTab===t[0])+'">'+t[1]+'</button>'}).join('')+'</div><div class="panel" id="aBody"><p>載入中…</p></div><p class="mfoot"><button type="button" class="more" id="admOut">登出</button></p>';
+    app.innerHTML='<div class="tiles" id="tiles"></div><div id="ocrAlert"></div><div class="tabs" role="tablist" style="max-width:860px">'+[['e','作文批改'],['o','訂單'],['m','會員'],['p','教材'],['c','課程'],['l','直播'],['n','公告'],['s','設定']].map(function(t){return '<button type="button" role="tab" data-at="'+t[0]+'" aria-selected="'+(aTab===t[0])+'">'+t[1]+'</button>'}).join('')+'</div><div class="panel" id="aBody"><p>載入中…</p></div><p class="mfoot"><button type="button" class="more" id="admOut">登出</button></p>';
     $$('[data-at]',app).forEach(function(b){b.addEventListener('click',function(){aTab=b.getAttribute('data-at');render()})});
     $('#admOut').addEventListener('click',signOut);
     tiles();ocrAlert();
@@ -1622,6 +1624,35 @@ function initAdmin(){
   };
 
   /* --- 設定 --- */
+  /* --- 公告(送出後會推播給所有已開啟手機通知的人) --- */
+  TABS.n=async function(body){
+    var r=await sb.from('announcements').select('id,title,body,url,created_at').order('created_at',{ascending:false}).limit(30);
+    if(r.error)throw r.error;
+    var pages={'':'會員專區','live.html':'直播專區','courses.html':'線上課程','membership.html':'付費會員','index.html':'首頁'};
+    body.innerHTML='<form id="nForm" class="fm" novalidate style="max-width:560px;margin-bottom:22px"><h3>發送公告</h3>'+
+      '<label class="fld" for="nT">標題(最多 40 字)<input id="nT" maxlength="40" placeholder="例如:本週六加開一場直播"></label>'+
+      '<label class="fld" for="nB">內容(最多 120 字)<textarea id="nB" rows="3" maxlength="120" placeholder="手機通知會顯示這段文字"></textarea></label>'+
+      '<label class="fld" for="nU">點通知後前往<select id="nU">'+Object.keys(pages).map(function(k){return '<option value="'+k+'">'+pages[k]+'</option>'}).join('')+'</select></label>'+
+      '<p class="err" id="nErr" role="alert"></p><button class="btn btn-fill" type="submit">送出並推播</button>'+
+      '<p class="mfoot">送出後,所有已開啟手機通知的人會立刻收到;其他人進會員專區的「我的課程」也看得到最近 30 天的公告。送出後無法收回已推出的通知。</p></form>'+
+      '<h3>已發送的公告</h3>'+((r.data||[]).length?'<div class="twrap"><table class="tbl"><thead><tr><th>日期</th><th>標題</th><th>內容</th><th></th></tr></thead><tbody>'+(r.data||[]).map(function(a){
+        return '<tr><td>'+fmtDate(a.created_at)+'</td><td>'+esc(a.title)+'</td><td>'+esc(a.body)+'</td><td><button type="button" class="btn btn-line sm" data-ndel="'+a.id+'">刪除</button></td></tr>'}).join('')+'</tbody></table></div>':'<p class="mfoot">還沒有發送過公告。</p>');
+    $('#nForm').addEventListener('submit',async function(e){
+      e.preventDefault();var er=$('#nErr'),t=$('#nT').value.trim(),b=$('#nB').value.trim(),u=$('#nU').value;
+      if(!t||!b){er.textContent='請填寫標題和內容。';return}
+      var btn=$('button[type=submit]',this);btn.disabled=true;er.textContent='';
+      var ins=await sb.from('announcements').insert({title:t,body:b,url:u||null,created_by:U.id});
+      btn.disabled=false;
+      if(ins.error){er.textContent='發送失敗:'+niceErr(ins.error);return}
+      toast('已發送公告,手機通知會在幾秒內送出');TABS.n(body);
+    });
+    $$('[data-ndel]',body).forEach(function(b){b.addEventListener('click',async function(){
+      if(b.getAttribute('data-ask')!=='1'){b.setAttribute('data-ask','1');b.textContent='再按一次刪除';return}
+      var d=await sb.from('announcements').delete().eq('id',+b.getAttribute('data-ndel'));
+      if(d.error)toast('刪除失敗:'+niceErr(d.error));else TABS.n(body);
+    })});
+  };
+
   TABS.s=async function(body){
     var pr=await sb.from('plans').select('id,name,amount,period_type,frequency,exec_times,active,sort').order('sort');
     var sr=await sb.from('site_settings').select('key,value');
@@ -1632,7 +1663,7 @@ function initAdmin(){
     body.insertAdjacentHTML('beforeend','<h3 style="margin-top:26px">資料備份</h3><div class="bkbox"><p class="mfoot" style="margin:0 0 10px">把網站所有資料表(會員、作文與評語、訂單、課程、直播…)匯出成一個檔案存到你的電腦。建議每月備份一次,出大改動前也先備份。檔案內有學生個資,請存放在安全的地方,不要上傳到公開處。作文與封面的圖片檔本身不在其中,檔案內只有它們的路徑。</p><button type="button" class="btn btn-line" id="bkGo">下載資料備份</button> <span class="mfoot" id="bkMsg" role="status"></span></div>');
     $('#bkGo').addEventListener('click',async function(){
       var bt=this,msg=$('#bkMsg');bt.disabled=true;msg.textContent='備份中…';
-      var TB=['profiles','admin_emails','site_settings','plans','memberships','products','courses','course_chapters','chapter_videos','enrollments','progress','orders','order_items','payments','essays','essay_files','feedback_templates','resources','resource_claims','live_events','live_links','live_views','contact_messages','ocr_usage'];
+      var TB=['profiles','admin_emails','site_settings','plans','memberships','products','courses','course_chapters','chapter_videos','enrollments','progress','orders','order_items','payments','essays','essay_files','feedback_templates','resources','resource_claims','live_events','live_links','live_views','announcements','contact_messages','ocr_usage'];
       var out={exported_at:new Date().toISOString(),site:location.host,tables:{},errors:{}},total=0;
       try{
         for(var i=0;i<TB.length;i++){
