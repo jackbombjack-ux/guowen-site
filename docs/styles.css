@@ -247,6 +247,10 @@ svg{display:block}
 .contact h2{font-family:var(--font-serif);font-weight:900;font-size:clamp(23px,3vw,29px);letter-spacing:.05em;margin-bottom:10px}
 .contact .lead{color:var(--text-soft);margin-bottom:18px}
 .contact .row{display:flex;gap:10px;flex-wrap:wrap}
+.lineqr{display:flex;align-items:center;gap:18px;flex-wrap:wrap;border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--card)}
+.lineqr img{width:min(220px,100%);height:auto;border-radius:10px;background:#fff;border:1px solid var(--line)}
+.lineqr p{flex:1 1 160px;min-width:0;color:var(--text-soft);font-size:14px;line-height:1.8}
+.lineqr p b{color:var(--text);font-size:15px}
 .btn-line-green{background:#06C755;color:#fff}
 form.fm{display:flex;flex-direction:column;gap:12px}
 .fld{display:flex;flex-direction:column;gap:5px;font-size:13.5px;color:var(--text-soft);letter-spacing:.04em}
