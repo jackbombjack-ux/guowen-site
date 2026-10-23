@@ -1228,3 +1228,9 @@ html.ld:not(.ld-out) .hero *,html.ld:not(.ld-out) .hero::before,html.ld:not(.ld-
 .tourhint b{font-family:var(--font-serif)}
 .tourhint p{margin:2px 0 0;font-size:13.5px;color:var(--text-soft)}
 @media (prefers-reduced-motion:reduce){.tour-hole{transition:none}}
+
+/* 空的教材專區:預留區塊 */
+.zone-empty{display:grid;gap:4px;justify-items:center;text-align:center;padding:34px 20px;border:1.5px dashed var(--line-strong);border-radius:12px;background:color-mix(in srgb,var(--card) 60%,var(--paper))}
+.zone-empty b{font-family:var(--font-serif);font-size:18px;letter-spacing:.06em;color:var(--bronze-text)}
+.zone-empty p{margin:0;color:var(--text-soft);font-size:14.5px;line-height:1.7}
+.zone-empty a{text-decoration:underline}

@@ -632,10 +632,13 @@ function renderMaterialsPage(dp){
   if(other.length)secs.push({name:'其他教材',sub:'',items:other});
   holder.innerHTML='';
   secs.forEach(function(sc,i){
-    if(!sc.items.length)return;
     var d=document.createElement('div');if(holder.children.length)d.style.marginTop='40px';
     d.innerHTML='<div class="sec-head"><div><h2>'+esc(sc.name)+'</h2>'+(sc.sub?'<p class="sub">'+esc(sc.sub)+'</p>':'')+'</div></div><div class="pgrid"></div>';
     var gr=$('.pgrid',d);
+    if(!sc.items.length){
+      gr.outerHTML='<div class="zone-empty" role="note"><b>'+esc(sc.name)+'教材籌備中</b><p>我們正在準備這個專區的教材,敬請期待。有想要的內容,歡迎<a href="contact.html">告訴我們</a>。</p></div>';
+      holder.appendChild(d);return;
+    }
     sc.items.forEach(function(g){
       if(cards[g.id])gr.appendChild(cards[g.id]);
       else gr.insertAdjacentHTML('beforeend',productCardHtml(g));
