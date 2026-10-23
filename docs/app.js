@@ -768,6 +768,49 @@ async function annBanner(){
     });
   }catch(e){console.error(e)}
 }
+/* ---------- 首頁自學教材:一次顯示 4 本,滑鼠移到箭頭或手機左滑可看後面的教材;後台新增的教材排在最後 ---------- */
+function homeCarousel(){
+  if(PAGE!=='index')return;
+  var grid=$('.section .pgrid');if(!grid||grid.getAttribute('data-hc'))return;
+  grid.setAttribute('data-hc','1');
+  var staticCards={};$$('.pcard',grid).forEach(function(el){staticCards[el.id.replace(/^card-/,'')]=el});
+  var list=GW.products.map(function(g,i){return {g:g,i:i,s:(PUB.products[g.id]&&PUB.products[g.id].sort!=null)?PUB.products[g.id].sort:i}})
+    .filter(function(o){return o.g.dyn||staticCards[o.g.id]})
+    .sort(function(a,b){return a.s-b.s||a.i-b.i});
+  var fresh=[];
+  list.forEach(function(o){
+    if(staticCards[o.g.id]){grid.appendChild(staticCards[o.g.id])}
+    else{grid.insertAdjacentHTML('beforeend',productCardHtml(o.g));fresh.push(1)}
+  });
+  if(fresh.length){bindAdd(grid);syncAddBtns()}
+  grid.classList.add('hrow');
+  var wrap=document.createElement('div');wrap.className='carousel hcar';
+  grid.parentNode.insertBefore(wrap,grid);wrap.appendChild(grid);
+  var arrow=function(cls,label,flip){return '<button type="button" class="car-arrow '+cls+'" aria-label="'+label+'"><svg class="ico" style="width:18px;height:18px'+(flip?';transform:rotate(180deg)':'')+'"><use href="#i-arrow"/></svg></button>'};
+  wrap.insertAdjacentHTML('beforeend',arrow('l','上一批教材',true)+arrow('r','下一批教材',false));
+  var bl=$('.car-arrow.l',wrap),br=$('.car-arrow.r',wrap),raf=0,dir=0;
+  function upd(){
+    var max=grid.scrollWidth-grid.clientWidth;
+    bl.hidden=grid.scrollLeft<=2;br.hidden=max<=2||grid.scrollLeft>=max-2;
+  }
+  var last=0;
+  function step(t){var dt=last?Math.min(50,Math.max(0,t-last)):16;last=t;grid.scrollLeft+=dir*dt*0.5;upd();if(dir)raf=requestAnimationFrame(step)}
+  function go(d){if(dir===d)return;dir=d;cancelAnimationFrame(raf);grid.classList.toggle('autoscroll',!!d);if(d){last=0;raf=requestAnimationFrame(step)}}
+  [[bl,-1],[br,1]].forEach(function(x){
+    var b=x[0],d=x[1];
+    b.addEventListener('mouseenter',function(){go(d)});
+    b.addEventListener('mouseleave',function(){go(0)});
+    b.addEventListener('blur',function(){go(0)});
+    b.addEventListener('click',function(){
+      go(0);var c=$('.pcard',grid),w=c?c.getBoundingClientRect().width+18:300;
+      var reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+      grid.scrollBy({left:d*w,behavior:reduce?'auto':'smooth'});
+    });
+  });
+  grid.addEventListener('scroll',upd,{passive:true});
+  window.addEventListener('resize',upd);
+  upd();setTimeout(upd,400);
+}
 async function boot(){
   var url=CONFIG.supabaseUrl,key=CONFIG.supabaseAnonKey;
   if(url&&key&&window.supabase&&window.supabase.createClient){
@@ -783,6 +826,7 @@ async function boot(){
     await loadPublic();
   }
   renderDyn();
+  homeCarousel();
   if(PAGE==='index')annBanner();
   onAuth.push(function(){TOUR.hint()});
   ready=true;

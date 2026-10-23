@@ -1234,3 +1234,19 @@ html.ld:not(.ld-out) .hero *,html.ld:not(.ld-out) .hero::before,html.ld:not(.ld-
 .zone-empty b{font-family:var(--font-serif);font-size:18px;letter-spacing:.06em;color:var(--bronze-text)}
 .zone-empty p{margin:0;color:var(--text-soft);font-size:14.5px;line-height:1.7}
 .zone-empty a{text-decoration:underline}
+
+/* 首頁自學教材:一排橫向捲動,一次露出 4 本 */
+.hcar{margin-inline:0}
+.pgrid.hrow{display:flex;gap:18px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-inline:4px;scrollbar-width:none;overscroll-behavior-x:contain;padding:8px 4px 22px;margin:-8px -4px -10px;-webkit-overflow-scrolling:touch}
+.pgrid.hrow::-webkit-scrollbar{display:none}
+.pgrid.hrow.autoscroll{scroll-snap-type:none}
+.pgrid.hrow .pcard{flex:0 0 calc((100% - 54px)/4);scroll-snap-align:start}
+.hcar .car-arrow{top:34%}
+.hcar .car-arrow.l{left:-18px}.hcar .car-arrow.r{right:-18px}
+@media (max-width:1000px){.pgrid.hrow .pcard{flex-basis:calc((100% - 18px)/2)}}
+@media (max-width:560px){
+  .pgrid.hrow{gap:14px}
+  .pgrid.hrow .pcard{flex-basis:78%}
+  .hcar .car-arrow.l{left:-6px}.hcar .car-arrow.r{right:-6px}
+}
+@media (hover:none){.hcar .car-arrow{display:none}}
