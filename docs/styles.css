@@ -1123,3 +1123,16 @@ html.ld:not(.ld-out) .hero *,html.ld:not(.ld-out) .hero::before,html.ld:not(.ld-
 .gdel:hover{background:color-mix(in srgb,#9B2C2C 10%,transparent);border-color:#9B2C2C}
 .gdel.armed{background:#9B2C2C;color:#fff;border-color:#9B2C2C}
 .gdel:disabled{opacity:.6}
+
+/* 手機:頁首文字區加厚底色,避免文字壓在深色山頭上看不清 */
+@media (max-width:760px){
+  .phero .art::after{background:linear-gradient(180deg,color-mix(in srgb,var(--paper) 96%,transparent) 0%,color-mix(in srgb,var(--paper) 88%,transparent) 62%,color-mix(in srgb,var(--paper) 46%,transparent) 100%);opacity:1}
+}
+
+/* 會員專區:手機通知卡片 */
+.pushcard{display:flex;gap:14px 20px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 16px;padding:16px 18px;border:1px solid var(--line);border-radius:12px;background:color-mix(in srgb,var(--card) 70%,var(--paper))}
+.pushcard>div:first-child{flex:1 1 260px;min-width:0}
+.pushcard b{font-family:var(--font-serif);font-size:16px;letter-spacing:.06em}
+.pushcard p{margin:4px 0 0;font-size:14px;line-height:1.75;color:var(--text-soft)}
+.pushcard .pact{display:flex;gap:8px;flex-wrap:wrap}
+.pushcard[data-st="on"]{border-color:var(--bronze-b)}

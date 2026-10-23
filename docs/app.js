@@ -456,7 +456,41 @@ function askLogin(reason,intent){
 }
 if(userBtn)userBtn.addEventListener('click',function(){if(U){location.href='member.html'}else{askLogin()}});
 $$('[data-login]').forEach(function(b){b.addEventListener('click',function(){if(U){location.href='member.html'}else{askLogin()}})});
-async function signOut(){try{await sb.auth.signOut()}catch(e){}U=null;MEM=null;ENR={};CLAIMED={};renderUserBtn();fire();toast('已登出')}
+/* ---------- 手機推播通知(Web Push) ---------- */
+var PUSH={
+  key:function(){return (window.GW&&GW.config&&GW.config.vapidPublicKey)||''},
+  supported:function(){return 'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window},
+  ios:function(){return /iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)},
+  standalone:function(){return !!((window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true)},
+  u8:function(b){var p='='.repeat((4-b.length%4)%4),r=atob((b+p).replace(/-/g,'+').replace(/_/g,'/')),o=new Uint8Array(r.length);for(var i=0;i<r.length;i++)o[i]=r.charCodeAt(i);return o},
+  sub:async function(){try{if(!PUSH.supported())return null;var r=await navigator.serviceWorker.getRegistration();return r?await r.pushManager.getSubscription():null}catch(_){return null}},
+  /* hide | ios | unsupported | denied | off | on */
+  state:async function(){
+    if(!PUSH.key())return 'hide';
+    if(!PUSH.supported())return PUSH.ios()&&!PUSH.standalone()?'ios':'unsupported';
+    if(Notification.permission==='denied')return 'denied';
+    return (await PUSH.sub())?'on':'off';
+  },
+  on:async function(){
+    var perm=await Notification.requestPermission();
+    if(perm!=='granted')return 'denied';
+    await navigator.serviceWorker.register('sw.js');
+    var reg=await navigator.serviceWorker.ready,opt={userVisibleOnly:true,applicationServerKey:PUSH.u8(PUSH.key())},sub;
+    try{sub=await reg.pushManager.subscribe(opt)}
+    catch(e){var old=await reg.pushManager.getSubscription();if(old){await old.unsubscribe();sub=await reg.pushManager.subscribe(opt)}else throw e}
+    var j=sub.toJSON();
+    var r=await sb.rpc('save_push_subscription',{p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth:j.keys.auth,p_ua:(navigator.userAgent||'').slice(0,300)});
+    if(r.error){try{await sub.unsubscribe()}catch(_){}throw r.error}
+    return 'on';
+  },
+  off:async function(){
+    var s=await PUSH.sub();if(!s)return;
+    var ep=s.endpoint;
+    try{await sb.from('push_subscriptions').delete().eq('endpoint',ep)}catch(_){}
+    try{await s.unsubscribe()}catch(_){}
+  }
+};
+async function signOut(){try{await PUSH.off()}catch(e){}try{await sb.auth.signOut()}catch(e){}U=null;MEM=null;ENR={};CLAIMED={};renderUserBtn();fire();toast('已登出')}
 
 /* ---------- 載入使用者與公開資料 ---------- */
 async function loadUser(session){
@@ -1083,7 +1117,10 @@ function initMember(){
         return '<li class="col"><div class="l1"><span>'+what+'</span><em>'+ORD_ST[o.status]+ful+'</em></div><small class="sub">'+fmtDate(o.created_at)+'・'+money(o.amount)+'・訂單 '+esc(o.merchant_trade_no)+'</small></li>'}).join('')||'<li class="none">還沒有訂單。</li>')+'</ul>';
     }else{
       var on=isMember();
-      body='<h2>帳號</h2><ul class="mlist"><li><span>登入方式</span><em>Google 帳號</em></li><li><span>會員等級</span><em>'+(on?'付費會員':'免費會員')+'</em></li>'+(MEM?'<li><span>方案</span><em>'+(MEM.plan?esc(planName(MEM.plan))+'・':'')+(MEM.status==='cancelled'?'已取消續約・':'')+'有效至 '+fmtDate(MEM.valid_until)+'</em></li>':'')+'</ul><p style="color:var(--text-soft);font-size:14px;margin-bottom:14px">'+(on?'你可以到直播專區進入會員限定直播。':'付費會員可觀看會員限定直播,在網站付款後自動開通。<a href="membership.html" style="text-decoration:underline;margin-left:4px">了解付費會員</a>')+'</p>'+
+      var pst=await PUSH.state();if(my!==rendering)return;
+      var PTX={on:'這支裝置已開啟通知:作文批改完成、直播開始前約 15 分鐘、付費會員到期前 3 天,手機都會跳出提醒。',off:'開啟後,作文批改完成、直播開始前約 15 分鐘、付費會員到期前 3 天,手機都會跳出提醒。',ios:'iPhone / iPad 需要先把網站加到主畫面:用 Safari 點下方的分享鈕,選「加入主畫面」,再從主畫面的圖示開啟本頁,就能開啟通知(需 iOS 16.4 以上)。',denied:'這個瀏覽器目前封鎖了通知。請到瀏覽器或手機的網站設定,把本站的通知改成「允許」,再回來開啟。',unsupported:'這個瀏覽器不支援網頁通知,建議改用 Chrome(電腦或 Android)或 Safari(iPhone 需先加到主畫面)。'};
+      var pushCard=pst==='hide'?'':'<div class="pushcard" id="pushCard" data-st="'+pst+'"><div><b>手機通知</b><p>'+PTX[pst]+'</p></div><div class="pact">'+(pst==='off'?'<button type="button" class="btn btn-fill sm" id="pushOn">開啟手機通知</button>':pst==='on'?'<button type="button" class="btn btn-line sm" id="pushTest">傳送測試通知</button><button type="button" class="btn btn-line sm" id="pushOff">關閉</button>':'')+'</div></div>';
+      body='<h2>帳號</h2><ul class="mlist"><li><span>登入方式</span><em>Google 帳號</em></li><li><span>會員等級</span><em>'+(on?'付費會員':'免費會員')+'</em></li>'+(MEM?'<li><span>方案</span><em>'+(MEM.plan?esc(planName(MEM.plan))+'・':'')+(MEM.status==='cancelled'?'已取消續約・':'')+'有效至 '+fmtDate(MEM.valid_until)+'</em></li>':'')+'</ul><p style="color:var(--text-soft);font-size:14px;margin-bottom:14px">'+(on?'你可以到直播專區進入會員限定直播。':'付費會員可觀看會員限定直播,在網站付款後自動開通。<a href="membership.html" style="text-decoration:underline;margin-left:4px">了解付費會員</a>')+'</p>'+pushCard+
         (on&&MEM.status==='active'&&MEM.plan?'<button type="button" class="btn btn-line" id="cancelSub">取消續約</button> ':'')+(isAdmin()?'<a class="btn btn-line" href="admin.html">老師後台</a> ':'')+'<button type="button" class="btn btn-line" id="logoutBtn">登出</button>';
     }
     app.innerHTML=payMsg+'<div class="profile"><span class="av">'+esc((U.name||'?').charAt(0).toUpperCase())+'</span><div><b>'+esc(U.name)+'</b><small>'+esc(U.email)+'</small></div></div>'+
@@ -1101,6 +1138,24 @@ function initMember(){
       toast(ok?'辨識完成':'這張照片無法自動辨識,老師會直接看照片批改');render();
     })});
     var lo=$('#logoutBtn');if(lo)lo.addEventListener('click',signOut);
+    var pOn=$('#pushOn');
+    if(pOn)pOn.addEventListener('click',async function(){
+      this.disabled=true;this.textContent='開啟中…';
+      try{var r=await PUSH.on();toast(r==='on'?'已開啟手機通知':'通知權限沒有開啟')}
+      catch(e){toast('開啟失敗:'+niceErr(e))}
+      render();
+    });
+    var pTest=$('#pushTest');
+    if(pTest)pTest.addEventListener('click',async function(){
+      this.disabled=true;
+      try{
+        var r=await callFn('push-test',{});
+        toast(r&&r.ok?'已送出測試通知,幾秒內手機會跳出':r&&r.reason==='not_configured'?'通知功能還在設定中,請稍後再試':'找不到可用的裝置,請先關閉再重新開啟');
+      }catch(e){toast(niceErr(e))}
+      this.disabled=false;
+    });
+    var pOff=$('#pushOff');
+    if(pOff)pOff.addEventListener('click',async function(){this.disabled=true;await PUSH.off();toast('已關閉這支裝置的通知');render()});
     var cs2=$('#cancelSub');
     if(cs2)cs2.addEventListener('click',function(){
       openModal('<h3 id="mTitle">取消續約</h3><p class="lead">取消後不會再自動扣款,已付款的期間(到 '+fmtDate(MEM.valid_until)+')仍可繼續使用。</p><div class="err" id="cxErr" role="alert"></div><button type="button" class="btn btn-fill" id="cxGo" style="width:100%">確認取消續約</button>',function(){
@@ -1278,8 +1333,8 @@ function initAdmin(){
             var ur=await sb.from('essays').update(upd).eq('id',id);
             if(ur.error)throw ur.error;
             if(scN!=null){try{localStorage.setItem('gw-score-max',String(mxN))}catch(_){}}
-            var told=false;try{var nr=await callFn('notify-graded',{essay_id:id});told=!!(nr&&nr.ok&&!nr.already)}catch(_){}
-            closeDlg(modal);toast(told?'已儲存批改,並寄信通知學生':'已儲存批改');render();
+            var via=[];try{var nr=await callFn('notify-graded',{essay_id:id});if(nr&&nr.pushed>0)via.push('手機推播');if(nr&&nr.email==='sent')via.push('Email')}catch(_){}
+            closeDlg(modal);toast(via.length?'已儲存批改,並用'+via.join('和')+'通知學生':'已儲存批改');render();
           }catch(ex){
             try{if(up.length)await sb.storage.from('essays').remove(up)}catch(_){}
             er.textContent='儲存失敗:'+niceErr(ex);this.disabled=false;this.textContent='儲存並標為已批改';
@@ -1574,6 +1629,31 @@ function initAdmin(){
     body.innerHTML='<h3>付費會員方案</h3><div class="twrap"><table class="tbl"><thead><tr><th>方案</th><th>金額(NT$)</th><th>扣款週期</th><th>開放</th><th></th></tr></thead><tbody>'+(pr.data||[]).map(function(p){
       return '<tr data-plan="'+esc(p.id)+'"><td>'+esc(p.name)+'</td><td><input type="number" min="1" step="10" data-f="amount" value="'+p.amount+'" style="width:100px"></td><td>每 '+p.frequency+' '+(p.period_type==='Y'?'年':p.period_type==='M'?'個月':'天')+',最多 '+p.exec_times+' 期</td><td><input type="checkbox" data-f="active"'+(p.active?' checked':'')+' aria-label="開放"></td><td><button type="button" class="btn btn-line sm" data-psave="'+esc(p.id)+'">儲存</button></td></tr>'}).join('')+'</tbody></table></div><p class="mfoot">已經在扣款的訂閱者,金額不會跟著改(綠界以下單當時的金額為準)。價格確認後把「開放」打勾,網站才會顯示並開放加入。</p>'+
       '<h3 style="margin-top:22px">網站設定</h3><form id="sForm" class="fm" style="max-width:520px"><label class="fld" style="flex-direction:row;gap:10px;align-items:center"><input type="checkbox" id="sPay"'+(st.payments_enabled===true?' checked':'')+'> 開放線上付款(教材、付費會員、付費課程)</label><label class="fld" for="sLine">LINE 官方帳號連結<input id="sLine" value="'+esc(st.line_url||'')+'" placeholder="https://lin.ee/…"></label><label class="fld" for="sYt">YouTube 頻道網址(公開直播)<input id="sYt" value="'+esc(st.youtube_url||'')+'" placeholder="https://www.youtube.com/@…"></label><div class="err" id="sErr" role="alert"></div><button class="btn btn-fill" type="submit" style="align-self:flex-start">儲存</button></form>';
+    body.insertAdjacentHTML('beforeend','<h3 style="margin-top:26px">資料備份</h3><div class="bkbox"><p class="mfoot" style="margin:0 0 10px">把網站所有資料表(會員、作文與評語、訂單、課程、直播…)匯出成一個檔案存到你的電腦。建議每月備份一次,出大改動前也先備份。檔案內有學生個資,請存放在安全的地方,不要上傳到公開處。作文與封面的圖片檔本身不在其中,檔案內只有它們的路徑。</p><button type="button" class="btn btn-line" id="bkGo">下載資料備份</button> <span class="mfoot" id="bkMsg" role="status"></span></div>');
+    $('#bkGo').addEventListener('click',async function(){
+      var bt=this,msg=$('#bkMsg');bt.disabled=true;msg.textContent='備份中…';
+      var TB=['profiles','admin_emails','site_settings','plans','memberships','products','courses','course_chapters','chapter_videos','enrollments','progress','orders','order_items','payments','essays','essay_files','feedback_templates','resources','resource_claims','live_events','live_links','live_views','contact_messages','ocr_usage'];
+      var out={exported_at:new Date().toISOString(),site:location.host,tables:{},errors:{}},total=0;
+      try{
+        for(var i=0;i<TB.length;i++){
+          var rows=[],from=0;
+          for(var pg=0;pg<50;pg++){
+            var r=await sb.from(TB[i]).select('*').range(from,from+999);
+            if(r.error){out.errors[TB[i]]=niceErr(r.error);break}
+            var d=r.data||[];rows=rows.concat(d);if(d.length<1000)break;from+=1000;
+          }
+          out.tables[TB[i]]=rows;total+=rows.length;
+          msg.textContent='備份中… '+(i+1)+' / '+TB.length;
+        }
+        var blob=new Blob([JSON.stringify(out,null,1)],{type:'application/json'});
+        var d0=new Date(),ds=d0.getFullYear()+('0'+(d0.getMonth()+1)).slice(-2)+('0'+d0.getDate()).slice(-2);
+        var a2=document.createElement('a');a2.href=URL.createObjectURL(blob);a2.download='guowen-backup-'+ds+'.json';document.body.appendChild(a2);a2.click();
+        setTimeout(function(){URL.revokeObjectURL(a2.href);a2.remove()},1500);
+        var ne=Object.keys(out.errors).length;
+        msg.textContent='已下載備份(共 '+total+' 筆資料'+(ne?',有 '+ne+' 個資料表讀取失敗:'+Object.keys(out.errors).join('、'):'')+')';
+      }catch(ex){msg.textContent='備份失敗:'+niceErr(ex)}
+      bt.disabled=false;
+    });
     $$('[data-psave]',body).forEach(function(b){b.addEventListener('click',async function(){
       var tr=b.closest('tr'),amt=parseInt($('[data-f=amount]',tr).value,10);
       if(!(amt>0)){toast('請輸入正確的金額');return}
