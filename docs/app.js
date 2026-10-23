@@ -600,21 +600,49 @@ var dynDone=false;
 function renderDyn(){
   if(dynDone)return;dynDone=true;
   var dp=GW.products.filter(function(g){return g.dyn}),dc=GW.courses.filter(function(c){return c.dyn});
-  if(PAGE==='materials'&&dp.length){
-    var w=$('.pg .wrap');
-    if(w){
-      var sec=document.createElement('div');sec.id='dynProds';sec.style.marginTop='40px';
-      sec.innerHTML='<div class="sec-head"><div><h2>更多教材</h2></div></div><div class="pgrid">'+dp.map(productCardHtml).join('')+'</div>';
-      w.appendChild(sec);bindAdd(sec);syncAddBtns();
-      var lp=$('.lead-p');if(lp)lp.textContent=lp.textContent.replace(/共有\s*\d+\s*本/,'共有 '+GW.products.length+' 本');
-    }
-  }
+  if(PAGE==='materials')renderMaterialsPage(dp);
   if(PAGE==='courses'&&dc.length){
     var cw=$('.courses');if(cw)cw.insertAdjacentHTML('beforeend',dc.map(courseCardHtml).join(''));
   }
   if(PAGE==='product-dyn')dynProduct();
   if(PAGE==='course-dyn')dynCourse();
   if(PAGE==='learn-dyn')dynLearn();
+}
+function renderMaterialsPage(dp){
+  var holder=$('.pg .wrap .section.first'),w=$('.pg .wrap'),lp=$('.lead-p'),cats=PUB.cats||[];
+  if(lp)lp.textContent=lp.textContent.replace(/共有\s*\d+\s*本/,'共有 '+GW.products.length+' 本');
+  if(!cats.length){
+    if(dp.length&&w){
+      var sec=document.createElement('div');sec.id='dynProds';sec.style.marginTop='40px';
+      sec.innerHTML='<div class="sec-head"><div><h2>更多教材</h2></div></div><div class="pgrid">'+dp.map(productCardHtml).join('')+'</div>';
+      w.appendChild(sec);bindAdd(sec);syncAddBtns();
+    }
+    return;
+  }
+  if(!holder)return;
+  var cards={};$$('.pcard',holder).forEach(function(el){cards[el.id.replace(/^card-/,'')]=el});
+  var groups={},other=[];cats.forEach(function(c){groups[c.id]=[]});
+  GW.products.map(function(g,i){return {g:g,i:i,s:(PUB.products[g.id]&&PUB.products[g.id].sort!=null)?PUB.products[g.id].sort:i}})
+    .sort(function(a,b){return a.s-b.s||a.i-b.i}).forEach(function(o){
+      var g=o.g;if(!g.dyn&&!cards[g.id])return;
+      var cid=PUB.products[g.id]&&PUB.products[g.id].category_id;
+      (cid&&groups[cid]?groups[cid]:other).push(g);
+    });
+  var secs=cats.map(function(c){return {name:c.name,sub:c.subtitle,items:groups[c.id]}});
+  if(other.length)secs.push({name:'其他教材',sub:'',items:other});
+  holder.innerHTML='';
+  secs.forEach(function(sc,i){
+    if(!sc.items.length)return;
+    var d=document.createElement('div');if(holder.children.length)d.style.marginTop='40px';
+    d.innerHTML='<div class="sec-head"><div><h2>'+esc(sc.name)+'</h2>'+(sc.sub?'<p class="sub">'+esc(sc.sub)+'</p>':'')+'</div></div><div class="pgrid"></div>';
+    var gr=$('.pgrid',d);
+    sc.items.forEach(function(g){
+      if(cards[g.id])gr.appendChild(cards[g.id]);
+      else gr.insertAdjacentHTML('beforeend',productCardHtml(g));
+    });
+    holder.appendChild(d);
+  });
+  bindAdd(holder);syncAddBtns();
 }
 function dynMissing(){var b=$('#dBody'),m=$('#dMissing');if(b)b.hidden=true;if(m)m.hidden=false}
 function dynProduct(){
@@ -665,9 +693,11 @@ function dynLearn(){
   initLearn();
 }
 async function selFb(table,cols,fb,order){
-  var q=sb.from(table).select(cols);if(order)q=q.order(order);
-  var r=await q;
-  if(r&&r.error&&fb){q=sb.from(table).select(fb);if(order)q=q.order(order);r=await q}
+  var list=[cols].concat(Array.isArray(fb)?fb:(fb?[fb]:[])),r;
+  for(var i=0;i<list.length;i++){
+    var q=sb.from(table).select(list[i]);if(order)q=q.order(order);
+    r=await q;if(!(r&&r.error))break;
+  }
   return r;
 }
 function addDynProduct(r){
@@ -682,10 +712,11 @@ function addDynCourse(r){
 async function loadPublic(){
   try{
     var rs=await Promise.all([
-      selFb('products','id,name,title,price,active,kind,sort,meta,tagline,cover_path,intro,feats,toc,gallery','id,price,active,kind,cover_path,intro,feats,toc,gallery','sort'),
+      selFb('products','id,name,title,price,active,kind,sort,meta,tagline,category_id,cover_path,intro,feats,toc,gallery',['id,name,title,price,active,kind,sort,meta,tagline,cover_path,intro,feats,toc,gallery','id,price,active,kind,cover_path,intro,feats,toc,gallery'],'sort'),
       selFb('courses','id,name,price,status,sort,intro,tagline,audience,cover_path','id,price,status','sort'),
       sb.from('plans').select('id,name,amount,period_type,frequency,active'),sb.from('site_settings').select('key,value'),
-      sb.from('resources').select('id,name,gate,storage_path,href'),sb.from('course_chapters').select('course_id,position,title').order('position')]);
+      sb.from('resources').select('id,name,gate,storage_path,href'),sb.from('course_chapters').select('course_id,position,title').order('position'),sb.from('product_categories').select('id,name,subtitle,sort').order('sort')]);
+    PUB.cats=(rs[6]&&rs[6].data)||[];
     (rs[0].data||[]).forEach(function(r){PUB.products[r.id]=r;var p=byId(GW.products,r.id);if(p)p.price=r.price;else addDynProduct(r)});
     (rs[1].data||[]).forEach(function(r){PUB.courses[r.id]=r;addDynCourse(r)});
     (rs[2].data||[]).forEach(function(r){PUB.plans[r.id]=r});
@@ -1564,16 +1595,64 @@ function initAdmin(){
   TABS.p=async function(body){
     var r=await sb.from('products').select('*').order('sort');
     var rows=r.data||[],EDS={};
+    var cr0=await sb.from('product_categories').select('*').order('sort');
+    var catOk=!cr0.error,cats=cr0.data||[];
+    function catOpts(sel,blank){return '<option value="">'+(blank||'未分類')+'</option>'+cats.map(function(c){return '<option value="'+esc(c.id)+'"'+(sel===c.id?' selected':'')+'>'+esc(c.name)+'</option>'}).join('')}
+    var catBox=!catOk?'':'<details class="addbox" id="catBox"><summary>專區管理(例如:高中、國中、國小、國家考試)</summary>'+
+      '<p class="mfoot" style="margin:0 0 10px">教材列表會依專區分區顯示。可以新增專區、改名、調整順序;把教材放進哪個專區,在下方表格的「專區」欄選。刪除專區不會刪掉教材,教材會變成「未分類」(顯示在最後的「其他教材」)。</p>'+
+      '<div id="catList">'+cats.map(function(c,i){return '<div class="catrow" data-cat="'+esc(c.id)+'"><input type="text" data-cf="name" value="'+esc(c.name)+'" maxlength="20" aria-label="專區名稱"><input type="text" data-cf="sub" value="'+esc(c.subtitle||'')+'" maxlength="60" placeholder="專區說明(可留空)" aria-label="專區說明"><span class="catact"><button type="button" class="btn btn-line sm" data-cup'+(i===0?' disabled':'')+' aria-label="上移">↑</button><button type="button" class="btn btn-line sm" data-cdn'+(i===cats.length-1?' disabled':'')+' aria-label="下移">↓</button><button type="button" class="btn btn-line sm" data-csv>儲存</button><button type="button" class="btn btn-line sm" data-cdel>刪除</button></span></div>'}).join('')+(cats.length?'':'<p class="mfoot">還沒有專區。</p>')+'</div>'+
+      '<form id="catNew" class="catrow" novalidate><input type="text" id="catnName" maxlength="20" placeholder="新專區名稱,例如:國小" aria-label="新專區名稱"><input type="text" id="catnSub" maxlength="60" placeholder="專區說明(可留空)" aria-label="新專區說明"><span class="catact"><button type="submit" class="btn btn-fill sm">＋ 新增專區</button></span></form></details>';
     var newForm='<details class="addbox" id="pNewBox"><summary>＋ 新增教材</summary><form id="pNew" novalidate>'+
       '<label class="fld">書名(顯示在教材卡片與購物車)<input type="text" id="pnName" maxlength="40" placeholder="例如:國文學霸筆記・續集"></label>'+
       '<label class="fld">完整書名(教材頁大標題,可留空沿用書名)<input type="text" id="pnTitle" maxlength="60"></label>'+
       '<div class="row2"><label class="fld">售價 NT$<input type="number" id="pnPrice" min="0" step="10" value="600"></label><label class="fld">類型<select id="pnKind"><option value="physical">實體書(需寄送)</option><option value="digital">電子檔</option></select></label></div>'+
+      (catOk?'<label class="fld">放進哪個專區<select id="pnCat">'+catOpts('','未分類(顯示在「其他教材」)')+'</select></label>':'')+
       '<label class="fld">分類說明(卡片上的小字)<input type="text" id="pnMeta" maxlength="80" placeholder="例如:寫作素材・內文約 146 頁"></label>'+
       '<label class="fld">一句話標語<input type="text" id="pnTag" maxlength="120"></label>'+
       '<button type="submit" class="btn btn-fill sm">建立教材</button> <span class="mfoot">建立後先是「未上架」,只有你看得到;補完封面、簡介、目錄,再勾選「上架」並按儲存,前台就會出現。</span></form></details>';
-    body.innerHTML=newForm+'<div class="twrap"><table class="tbl"><thead><tr><th>教材</th><th>售價(NT$)</th><th>類型</th><th>上架</th><th></th></tr></thead><tbody>'+rows.map(function(p){
-      return '<tr data-prow="'+esc(p.id)+'"><td>'+esc(p.name)+'</td><td><input type="number" min="0" step="10" value="'+p.price+'" data-f="price" style="width:90px"></td><td><select data-f="kind"><option value="physical"'+(p.kind==='physical'?' selected':'')+'>實體書(需寄送)</option><option value="digital"'+(p.kind==='digital'?' selected':'')+'>電子檔</option></select></td><td><input type="checkbox" data-f="active"'+(p.active?' checked':'')+' aria-label="上架"></td><td class="pact2"><button type="button" class="btn btn-line sm" data-save="'+esc(p.id)+'">儲存</button> <button type="button" class="btn btn-line sm" data-edit="'+esc(p.id)+'" aria-expanded="false">編輯內容與圖片</button></td></tr>'+
-        '<tr data-erow="'+esc(p.id)+'" hidden><td colspan="5"></td></tr>'}).join('')+'</tbody></table></div><p class="mfoot">價格會立刻套用到網站與結帳。已付款的舊訂單金額不受影響。「編輯內容與圖片」可以自己換封面、改簡介、特色與目錄,以及上傳內頁圖。</p>';
+    body.innerHTML=catBox+newForm+'<div class="twrap"><table class="tbl"><thead><tr><th>教材</th><th>售價(NT$)</th><th>類型</th>'+(catOk?'<th>專區</th>':'')+'<th>上架</th><th></th></tr></thead><tbody>'+rows.map(function(p){
+      return '<tr data-prow="'+esc(p.id)+'"><td>'+esc(p.name)+'</td><td><input type="number" min="0" step="10" value="'+p.price+'" data-f="price" style="width:90px"></td><td><select data-f="kind"><option value="physical"'+(p.kind==='physical'?' selected':'')+'>實體書(需寄送)</option><option value="digital"'+(p.kind==='digital'?' selected':'')+'>電子檔</option></select></td>'+(catOk?'<td><select data-f="cat">'+catOpts(p.category_id||'')+'</select></td>':'')+'<td><input type="checkbox" data-f="active"'+(p.active?' checked':'')+' aria-label="上架"></td><td class="pact2"><button type="button" class="btn btn-line sm" data-save="'+esc(p.id)+'">儲存</button> <button type="button" class="btn btn-line sm" data-edit="'+esc(p.id)+'" aria-expanded="false">編輯內容與圖片</button></td></tr>'+
+        '<tr data-erow="'+esc(p.id)+'" hidden><td colspan="6"></td></tr>'}).join('')+'</tbody></table></div><p class="mfoot">價格會立刻套用到網站與結帳。已付款的舊訂單金額不受影響。「編輯內容與圖片」可以自己換封面、改簡介、特色與目錄,以及上傳內頁圖。</p>';
+    if(catOk){
+      var cnf=$('#catNew',body);
+      cnf.addEventListener('submit',async function(ev){
+        ev.preventDefault();
+        var nm=$('#catnName').value.trim();if(!nm){toast('請輸入專區名稱');return}
+        var mx=cats.reduce(function(m,x){return Math.max(m,x.sort||0)},0);
+        var ins=await sb.from('product_categories').insert({id:'k'+Date.now().toString(36),name:nm,subtitle:$('#catnSub').value.trim()||null,sort:mx+1});
+        if(ins.error){toast('新增失敗:'+niceErr(ins.error));return}
+        toast('已新增專區「'+nm+'」。到下方表格的「專區」欄,把教材放進去。');
+        await TABS.p(body);var bx=$('#catBox',body);if(bx)bx.open=true;
+      });
+      $$('[data-cat]',body).forEach(function(row){
+        var id=row.getAttribute('data-cat'),idx=cats.map(function(c){return c.id}).indexOf(id);
+        $('[data-csv]',row).addEventListener('click',async function(){
+          var nm=$('[data-cf=name]',row).value.trim();if(!nm){toast('專區名稱不能空白');return}
+          var u=await sb.from('product_categories').update({name:nm,subtitle:$('[data-cf=sub]',row).value.trim()||null}).eq('id',id);
+          if(u.error){toast('儲存失敗:'+niceErr(u.error));return}
+          toast('已儲存專區');await TABS.p(body);var bx=$('#catBox',body);if(bx)bx.open=true;
+        });
+        function swap(j){
+          return async function(){
+            var o=cats[j],me=cats[idx];if(!o)return;
+            var a=sb.from('product_categories').update({sort:o.sort}).eq('id',me.id),b2=sb.from('product_categories').update({sort:me.sort}).eq('id',o.id);
+            var ra=await a,rb=await b2;
+            if(ra.error||rb.error){toast('調整順序失敗');return}
+            if(o.sort===me.sort){await sb.from('product_categories').update({sort:me.sort+(j<idx?-1:1)}).eq('id',me.id)}
+            await TABS.p(body);var bx=$('#catBox',body);if(bx)bx.open=true;
+          };
+        }
+        $('[data-cup]',row).addEventListener('click',swap(idx-1));
+        $('[data-cdn]',row).addEventListener('click',swap(idx+1));
+        $('[data-cdel]',row).addEventListener('click',async function(){
+          var n=rows.filter(function(x){return x.category_id===id}).length;
+          if(!window.confirm('要刪除專區「'+$('[data-cf=name]',row).value+'」嗎?'+(n?'裡面的 '+n+' 本教材不會被刪除,會變成「未分類」。':''))){return}
+          var d=await sb.from('product_categories').delete().eq('id',id);
+          if(d.error){toast('刪除失敗:'+niceErr(d.error));return}
+          toast('已刪除專區');await TABS.p(body);var bx=$('#catBox',body);if(bx)bx.open=true;
+        });
+      });
+    }
     $('#pNew',body).addEventListener('submit',async function(ev){
       ev.preventDefault();
       var name=$('#pnName').value.trim(),price=parseInt($('#pnPrice').value,10);
@@ -1581,6 +1660,7 @@ function initAdmin(){
       if(!(price>=0)){toast('請輸入正確的售價');return}
       var mx=rows.reduce(function(m,x){return Math.max(m,x.sort||0)},0);
       var row={id:'p'+Date.now().toString(36),name:name,title:$('#pnTitle').value.trim()||name,price:price,kind:$('#pnKind').value,active:false,sort:mx+1,meta:$('#pnMeta').value.trim()||null,tagline:$('#pnTag').value.trim()||null};
+      if(catOk&&$('#pnCat')&&$('#pnCat').value)row.category_id=$('#pnCat').value;
       var ins=await sb.from('products').insert(row);
       if(ins.error){toast('新增失敗:'+niceErr(ins.error));return}
       PUB.products[row.id]=row;addDynProduct(row);
@@ -1590,7 +1670,8 @@ function initAdmin(){
     $$('[data-save]',body).forEach(function(b){b.addEventListener('click',async function(){
       var tr=b.closest('tr'),price=parseInt($('[data-f=price]',tr).value,10);
       if(!(price>=0)){toast('請輸入正確的價格');return}
-      var u=await sb.from('products').update({price:price,kind:$('[data-f=kind]',tr).value,active:$('[data-f=active]',tr).checked}).eq('id',b.getAttribute('data-save'));
+      var up={price:price,kind:$('[data-f=kind]',tr).value,active:$('[data-f=active]',tr).checked};var cs=$('[data-f=cat]',tr);if(cs)up.category_id=cs.value||null;
+      var u=await sb.from('products').update(up).eq('id',b.getAttribute('data-save'));
       toast(u.error?'儲存失敗:'+niceErr(u.error):'已儲存');
     })});
     $$('[data-edit]',body).forEach(function(b){b.addEventListener('click',function(){
@@ -1886,7 +1967,7 @@ function initAdmin(){
     body.insertAdjacentHTML('beforeend','<h3 style="margin-top:26px">資料備份</h3><div class="bkbox"><p class="mfoot" style="margin:0 0 10px">把網站所有資料表(會員、作文與評語、訂單、課程、直播…)匯出成一個檔案存到你的電腦。建議每月備份一次,出大改動前也先備份。檔案內有學生個資,請存放在安全的地方,不要上傳到公開處。作文與封面的圖片檔本身不在其中,檔案內只有它們的路徑。</p><button type="button" class="btn btn-line" id="bkGo">下載資料備份</button> <span class="mfoot" id="bkMsg" role="status"></span></div>');
     $('#bkGo').addEventListener('click',async function(){
       var bt=this,msg=$('#bkMsg');bt.disabled=true;msg.textContent='備份中…';
-      var TB=['profiles','admin_emails','site_settings','plans','memberships','products','courses','course_chapters','chapter_videos','enrollments','progress','orders','order_items','payments','essays','essay_files','feedback_templates','resources','resource_claims','live_events','live_links','live_views','announcements','contact_messages','ocr_usage'];
+      var TB=['profiles','admin_emails','site_settings','plans','memberships','products','courses','course_chapters','chapter_videos','enrollments','progress','orders','order_items','payments','product_categories','essays','essay_files','feedback_templates','resources','resource_claims','live_events','live_links','live_views','announcements','contact_messages','ocr_usage'];
       var out={exported_at:new Date().toISOString(),site:location.host,tables:{},errors:{}},total=0;
       try{
         for(var i=0;i<TB.length;i++){
