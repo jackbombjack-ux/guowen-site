@@ -499,7 +499,7 @@ async function loadUser(session){
   var au=session.user,prof=null;
   for(var i=0;i<4&&!prof;i++){var r=await sb.from('profiles').select('id,email,name,role').eq('id',au.id).maybeSingle();prof=r.data;if(!prof)await sleep(500)}
   var meta=au.user_metadata||{};
-  U={id:au.id,email:(prof&&prof.email)||au.email||'',name:(prof&&prof.name)||meta.full_name||meta.name||(au.email||'會員').split('@')[0],role:prof?prof.role:'student'};
+  U={id:au.id,email:(prof&&prof.email)||au.email||'',name:(prof&&prof.name)||meta.full_name||meta.name||(au.email||'會員').split('@')[0],role:prof?prof.role:'student',toured:!!meta.gw_toured};
   await loadMine();
 }
 async function loadMine(){
@@ -748,6 +748,23 @@ function fire(){renderUserBtn();onAuth.forEach(function(f){try{f()}catch(e){cons
 function takeIntent(){
   try{var j=JSON.parse(sessionStorage.getItem('gw-after')||'null');sessionStorage.removeItem('gw-after');return j&&j.page===PAGE?j:null}catch(e){return null}
 }
+/* ---------- 首頁公告橫幅(最近 30 天最新一則,公開可見,可關閉) ---------- */
+async function annBanner(){
+  try{
+    if(!sb||$('#annBar'))return;
+    var r=await sb.from('announcements').select('id,title,body,url,created_at').gte('created_at',new Date(Date.now()-30*864e5).toISOString()).order('created_at',{ascending:false}).limit(1);
+    var a=r&&r.data&&r.data[0];if(!a)return;
+    try{if(sessionStorage.getItem('gw-ann-'+a.id))return}catch(_){}
+    var main=$('#main');if(!main)return;
+    var ok=a.url&&/^[\w\-.\/?=&#]+$/.test(a.url)&&!/^\w+:/.test(a.url);
+    var txt='<b>'+esc(a.title)+'</b><span>'+esc(a.body)+'</span>';
+    main.insertAdjacentHTML('afterbegin','<div class="annbar" id="annBar" role="status"><span class="annic" aria-hidden="true">公告</span>'+(ok?'<a href="'+esc(a.url)+'">'+txt+'</a>':'<div>'+txt+'</div>')+'<button type="button" class="annx" aria-label="關閉公告">×</button></div>');
+    $('.annx',$('#annBar')).addEventListener('click',function(){
+      try{sessionStorage.setItem('gw-ann-'+a.id,'1')}catch(_){}
+      var b=$('#annBar');if(b)b.remove();
+    });
+  }catch(e){console.error(e)}
+}
 async function boot(){
   var url=CONFIG.supabaseUrl,key=CONFIG.supabaseAnonKey;
   if(url&&key&&window.supabase&&window.supabase.createClient){
@@ -763,6 +780,8 @@ async function boot(){
     await loadPublic();
   }
   renderDyn();
+  if(PAGE==='index')annBanner();
+  onAuth.push(function(){TOUR.hint()});
   ready=true;
   fire();
   var it=takeIntent();
@@ -1228,6 +1247,124 @@ function initEssay(){
 var FUL={none:'',to_ship:'準備寄出',shipped:'已寄出',done:'已完成'};
 var ORD_ST={pending:'待付款',paid:'已付款',failed:'付款失敗',cancelled:'已取消'};
 var ORD_KIND={product:'教材',course:'課程',membership:'付費會員'};
+/* ---------- 新用戶導覽與新手任務 ---------- */
+var TOUR={
+  shown:false,on:false,
+  key:function(){return 'gw-tour-'+(U?U.id:'')},
+  done:function(){
+    if(U&&U.toured)return true;
+    try{return !!localStorage.getItem(this.key())}catch(_){return false}
+  },
+  mark:function(){
+    if(!U)return;U.toured=true;
+    try{localStorage.setItem(this.key(),'1')}catch(_){}
+    try{if(sb&&sb.auth&&sb.auth.updateUser)sb.auth.updateUser({data:{gw_toured:true}}).catch(function(){})}catch(_){}
+  },
+  steps:function(){
+    return [
+      {sel:'.profile',t:'歡迎來到會員專區',x:'這裡是你的個人頁面。花不到一分鐘,帶你看看每個功能在哪裡。'},
+      {sel:'[data-t=c]',t:'我的課程',x:'報名後的線上課程會列在這裡,點進去就能開始看影片。老師發的最新公告也會顯示在這一頁最上方。'},
+      {sel:'[data-t=e]',t:'我的作文',x:'拍下手寫作文上傳,老師批改後,分數和評語會出現在這裡,有新批改時分頁會亮起提示。'},
+      {sel:'[data-t=r]',t:'我的資源',x:'在「免費資源」領取的講義與檔案都收在這裡,隨時可以重新下載。'},
+      {sel:'[data-t=o]',t:'我的訂單',x:'購買教材、課程與會員的紀錄,以及教材的出貨狀態,都可以在這裡查看。'},
+      {sel:'[data-t=a]',t:'帳號與手機通知',x:'建議在這裡開啟手機通知:作文批改完成、直播開始前,手機都會提醒你。想重看這份導覽,也在這一頁。'},
+      {sel:'.nav',t:'網站主選單',x:'上方選單可以前往免費資源、自學教材、線上課程與直播專區。手機版請點右上角選單。'}
+    ];
+  },
+  start:function(){
+    if(this.on)return;
+    var self=this,steps=this.steps(),i=0,prev=document.activeElement;
+    this.on=true;
+    var ov=document.createElement('div');ov.className='tour';
+    ov.innerHTML='<div class="tour-hole" aria-hidden="true"></div><div class="tour-card" role="dialog" aria-modal="true" aria-labelledby="tourT" tabindex="-1"><div class="tour-dots" aria-hidden="true"></div><b id="tourT"></b><p id="tourX"></p><div class="tour-act"><button type="button" class="more" data-tskip>略過導覽</button><span><button type="button" class="btn btn-line sm" data-tprev>上一步</button> <button type="button" class="btn btn-fill sm" data-tnext>下一步</button></span></div></div>';
+    document.body.appendChild(ov);
+    var hole=$('.tour-hole',ov),card=$('.tour-card',ov);
+    function target(){var st=steps[i],el=st.sel?$(st.sel):null;return el&&el.getBoundingClientRect().width>0&&el.getBoundingClientRect().height>0?el:null}
+    function place(){
+      var el=target(),vw=window.innerWidth,vh=window.innerHeight,cw=card.offsetWidth,ch=card.offsetHeight,top,left;
+      if(!el){ov.classList.add('nohole');top=Math.max(12,(vh-ch)/2);left=Math.max(12,(vw-cw)/2)}
+      else{
+        ov.classList.remove('nohole');
+        var r=el.getBoundingClientRect(),pd=6;
+        hole.style.cssText='top:'+(r.top-pd)+'px;left:'+(r.left-pd)+'px;width:'+(r.width+pd*2)+'px;height:'+(r.height+pd*2)+'px';
+        top=r.bottom+pd+12;
+        if(top+ch>vh-12)top=r.top-pd-12-ch;
+        if(top<12)top=Math.max(12,Math.min(vh-ch-12,(vh-ch)/2));
+        left=Math.min(Math.max(12,r.left+r.width/2-cw/2),vw-cw-12);
+      }
+      card.style.top=top+'px';card.style.left=left+'px';
+    }
+    function show(n){
+      i=n;var st=steps[i],el=st.sel?$(st.sel):null;
+      if(el&&el.getBoundingClientRect().width>0){try{el.scrollIntoView({block:'center',inline:'nearest'})}catch(_){}}
+      $('#tourT',ov).textContent=st.t;$('#tourX',ov).textContent=st.x;
+      $('.tour-dots',ov).innerHTML=steps.map(function(_,k){return '<i'+(k===i?' class="on"':'')+'></i>'}).join('');
+      $('[data-tprev]',ov).hidden=i===0;
+      $('[data-tnext]',ov).textContent=i===steps.length-1?'開始使用':'下一步 ('+(i+1)+'/'+steps.length+')';
+      place();
+      try{$('[data-tnext]',ov).focus({preventScroll:true})}catch(_){}
+    }
+    function end(){
+      document.removeEventListener('keydown',key,true);window.removeEventListener('resize',place);window.removeEventListener('scroll',place,true);
+      ov.remove();self.on=false;self.mark();
+      try{if(prev&&prev.focus&&document.contains(prev))prev.focus({preventScroll:true})}catch(_){}
+    }
+    function key(e){
+      if(e.key==='Escape'){e.preventDefault();end()}
+      else if(e.key==='ArrowRight'&&i<steps.length-1){show(i+1)}
+      else if(e.key==='ArrowLeft'&&i>0){show(i-1)}
+      else if(e.key==='Tab'){
+        var f=$$('button:not([hidden])',card);if(!f.length)return;
+        var a=document.activeElement,k=f.indexOf(a);
+        if(e.shiftKey&&(k<=0)){e.preventDefault();f[f.length-1].focus()}
+        else if(!e.shiftKey&&(k===f.length-1||k<0)){e.preventDefault();f[0].focus()}
+      }
+    }
+    $('[data-tskip]',ov).addEventListener('click',end);
+    $('[data-tprev]',ov).addEventListener('click',function(){if(i>0)show(i-1)});
+    $('[data-tnext]',ov).addEventListener('click',function(){if(i<steps.length-1)show(i+1);else end()});
+    document.addEventListener('keydown',key,true);window.addEventListener('resize',place);window.addEventListener('scroll',place,true);
+    show(0);
+  },
+  maybeStart:function(){
+    if(this.shown||this.on)return;
+    var force=false;try{force=/(^|[?&])tour=1(&|$)/.test(location.search)}catch(_){}
+    if(!force&&(this.done()||isAdmin()))return;
+    this.shown=true;
+    if(force){try{history.replaceState(null,'',location.pathname)}catch(_){}}
+    var self=this;setTimeout(function(){self.start()},450);
+  },
+  hideKey:function(){return 'gw-start-hide-'+(U?U.id:'')},
+  cardHidden:function(){try{return !!localStorage.getItem(this.hideKey())}catch(_){return false}},
+  /* 新手任務卡(只給學生,顯示在「我的課程」最上方;可收起) */
+  card:async function(){
+    if(!U||isAdmin()||this.cardHidden())return '';
+    var pst='hide',hasEssay=false;
+    try{pst=await PUSH.state()}catch(_){}
+    try{var er=await sb.from('essays').select('id').eq('student_id',U.id).limit(1);hasEssay=!!(er.data&&er.data.length)}catch(_){}
+    var items=[
+      {ok:this.done(),t:'看完網站導覽',go:'<button type="button" class="more" data-sc-tour>開始導覽</button>'}
+    ];
+    if(pst!=='hide')items.push({ok:pst==='on',t:'開啟手機通知(批改完成就會提醒你)',go:'<button type="button" class="more" data-sc-go="a">前往設定</button>'});
+    items.push({ok:Object.keys(CLAIMED).length>0,t:'領取一份免費資源',go:'<a class="more" href="resources.html">去看看</a>'});
+    items.push({ok:Object.keys(ENR).length>0,t:'報名一門課程(免費課程可直接開始)',go:'<a class="more" href="courses.html">去看看</a>'});
+    items.push({ok:hasEssay,t:'上傳你的第一篇作文給老師批改',go:'<a class="more" href="essay.html">去上傳</a>'});
+    var n=items.filter(function(x){return x.ok}).length,all=n===items.length;
+    return '<div class="startcard" id="startCard"><div class="sc-h"><b>'+(all?'新手任務全部完成!':'新手任務 '+n+' / '+items.length)+'</b><span class="sc-bar" aria-hidden="true"><i style="width:'+Math.round(n/items.length*100)+'%"></i></span><button type="button" class="more" data-sc-hide>'+(all?'收起':'不再顯示')+'</button></div><ul>'+
+      items.map(function(x){return '<li'+(x.ok?' class="done"':'')+'><span class="sc-ck" aria-hidden="true">'+(x.ok?'✓':'')+'</span><span class="sc-t">'+x.t+(x.ok?'<span class="sr">(已完成)</span>':'')+'</span>'+(x.ok?'':'<em>'+x.go+'</em>')+'</li>'}).join('')+'</ul></div>';
+  },
+  /* 其他頁面的歡迎提示:第一次登入、還沒看過導覽時,提醒去會員專區看導覽 */
+  hint:function(){
+    var old=$('#tourHint');
+    if(!U||isAdmin()||this.done()||PAGE==='member'||PAGE==='admin'){if(old)old.remove();return}
+    if(old)return;
+    try{if(sessionStorage.getItem('gw-tourhint'))return}catch(_){}
+    var d=document.createElement('div');d.className='tourhint';d.id='tourHint';d.setAttribute('role','region');d.setAttribute('aria-label','新手導覽');
+    d.innerHTML='<div><b>第一次來嗎?</b><p>花一分鐘認識會員專區和網站功能。</p></div><span><a class="btn btn-fill sm" href="member.html?tour=1">看導覽</a> <button type="button" class="more" data-hx>之後再說</button></span>';
+    document.body.appendChild(d);
+    $('[data-hx]',d).addEventListener('click',function(){try{sessionStorage.setItem('gw-tourhint','1')}catch(_){}d.remove()});
+  }
+};
 function initMember(){
   var app=$('#memberApp');if(!app)return;
   var tab='c',payMsg='',paying=false,rendering=0;
@@ -1265,9 +1402,11 @@ function initMember(){
     var body='';
     var ANN=[];
     if(tab==='c'){try{var anr=await sb.from('announcements').select('id,title,body,created_at').gte('created_at',new Date(Date.now()-30*864e5).toISOString()).order('created_at',{ascending:false}).limit(3);ANN=anr.data||[]}catch(_){ANN=[]}if(my!==rendering)return}
+    var SC='';
+    if(tab==='c'){SC=await TOUR.card();if(my!==rendering)return}
     if(tab==='c'){
       var cs=Object.keys(ENR).map(function(id){var c=byId(GW.courses,id);return c?'<li><a href="'+c.learn+'">'+esc(c.name)+'</a><em>前往學習</em></li>':''}).join('')||'<li class="none">尚未報名課程。<a href="courses.html" style="text-decoration:underline;margin-left:6px">看看線上課程</a></li>';
-      body=(ANN.length?'<h2>最新公告</h2><ul class="mlist annlist">'+ANN.map(function(a){return '<li><span><b>'+esc(a.title)+'</b><br><small>'+esc(a.body)+'</small></span><em>'+fmtDate(a.created_at)+'</em></li>'}).join('')+'</ul>':'')+'<h2'+(ANN.length?' style="margin-top:22px"':'')+'>我的課程</h2><ul class="mlist">'+cs+'</ul>';
+      body=SC+(ANN.length?'<h2>最新公告</h2><ul class="mlist annlist">'+ANN.map(function(a){return '<li><span><b>'+esc(a.title)+'</b><br><small>'+esc(a.body)+'</small></span><em>'+fmtDate(a.created_at)+'</em></li>'}).join('')+'</ul>':'')+'<h2'+(ANN.length?' style="margin-top:22px"':'')+'>我的課程</h2><ul class="mlist">'+cs+'</ul>';
     }else if(tab==='e'){
       var es=await fetchMyEssays();if(my!==rendering)return;
       var fpaths=[];es.forEach(function(e){e.essay_files.forEach(function(f){fpaths.push(f.path)})});
@@ -1299,7 +1438,7 @@ function initMember(){
       var PTX={on:'這支裝置已開啟通知:作文批改完成、直播開始前約 15 分鐘、付費會員到期前 3 天,手機都會跳出提醒。',off:'開啟後,作文批改完成、直播開始前約 15 分鐘、付費會員到期前 3 天,手機都會跳出提醒。',ios:'iPhone / iPad 需要先把網站加到主畫面:用 Safari 點下方的分享鈕,選「加入主畫面」,再從主畫面的圖示開啟本頁,就能開啟通知(需 iOS 16.4 以上)。',denied:'這個瀏覽器目前封鎖了通知。請到瀏覽器或手機的網站設定,把本站的通知改成「允許」,再回來開啟。',unsupported:'這個瀏覽器不支援網頁通知,建議改用 Chrome(電腦或 Android)或 Safari(iPhone 需先加到主畫面)。'};
       var pushCard=pst==='hide'?'':'<div class="pushcard" id="pushCard" data-st="'+pst+'"><div><b>手機通知</b><p>'+PTX[pst]+'</p></div><div class="pact">'+(pst==='off'?'<button type="button" class="btn btn-fill sm" id="pushOn">開啟手機通知</button>':pst==='on'?'<button type="button" class="btn btn-line sm" id="pushTest">傳送測試通知</button><button type="button" class="btn btn-line sm" id="pushOff">關閉</button>':'')+'</div></div>';
       body='<h2>帳號</h2><ul class="mlist"><li><span>登入方式</span><em>Google 帳號</em></li><li><span>會員等級</span><em>'+(on?'付費會員':'免費會員')+'</em></li>'+(MEM?'<li><span>方案</span><em>'+(MEM.plan?esc(planName(MEM.plan))+'・':'')+(MEM.status==='cancelled'?'已取消續約・':'')+'有效至 '+fmtDate(MEM.valid_until)+'</em></li>':'')+'</ul><p style="color:var(--text-soft);font-size:14px;margin-bottom:14px">'+(on?'你可以到直播專區進入會員限定直播。':'付費會員可觀看會員限定直播,在網站付款後自動開通。<a href="membership.html" style="text-decoration:underline;margin-left:4px">了解付費會員</a>')+'</p>'+pushCard+
-        (on&&MEM.status==='active'&&MEM.plan?'<button type="button" class="btn btn-line" id="cancelSub">取消續約</button> ':'')+(isAdmin()?'<a class="btn btn-line" href="admin.html">老師後台</a> ':'')+'<button type="button" class="btn btn-line" id="logoutBtn">登出</button>';
+        (on&&MEM.status==='active'&&MEM.plan?'<button type="button" class="btn btn-line" id="cancelSub">取消續約</button> ':'')+(isAdmin()?'<a class="btn btn-line" href="admin.html">老師後台</a> ':'')+'<button type="button" class="btn btn-line" id="tourAgain">重看網站導覽</button> <button type="button" class="btn btn-line" id="logoutBtn">登出</button>';
     }
     app.innerHTML=payMsg+'<div class="profile"><span class="av">'+esc((U.name||'?').charAt(0).toUpperCase())+'</span><div><b>'+esc(U.name)+'</b><small>'+esc(U.email)+'</small></div></div>'+
      '<div class="tabs mtabs" role="tablist">'+[['c','我的課程'],['e','我的作文'],['r','我的資源'],['o','我的訂單'],['a','帳號']].map(function(t){return '<button type="button" role="tab" data-t="'+t[0]+'" aria-selected="'+(tab===t[0])+'">'+t[1]+(t[0]==='e'&&UNSEEN>0&&tab!=='e'?' <span class="newpill">'+UNSEEN+'</span>':'')+'</button>'}).join('')+'</div><div class="panel">'+body+'</div>';
@@ -1316,6 +1455,11 @@ function initMember(){
       toast(ok?'辨識完成':'這張照片無法自動辨識,老師會直接看照片批改');render();
     })});
     var lo=$('#logoutBtn');if(lo)lo.addEventListener('click',signOut);
+    var ta=$('#tourAgain');if(ta)ta.addEventListener('click',function(){TOUR.start()});
+    var sct=$('[data-sc-tour]',app);if(sct)sct.addEventListener('click',function(){TOUR.start()});
+    var sch=$('[data-sc-hide]',app);if(sch)sch.addEventListener('click',function(){try{localStorage.setItem(TOUR.hideKey(),'1')}catch(_){}var c=$('#startCard');if(c)c.remove()});
+    $$('[data-sc-go]',app).forEach(function(b){b.addEventListener('click',function(){tab=b.getAttribute('data-sc-go');render()})});
+    TOUR.maybeStart();
     var pOn=$('#pushOn');
     if(pOn)pOn.addEventListener('click',async function(){
       this.disabled=true;this.textContent='開啟中…';

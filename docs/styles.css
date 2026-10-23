@@ -1188,3 +1188,43 @@ html.ld:not(.ld-out) .hero *,html.ld:not(.ld-out) .hero::before,html.ld:not(.ld-
 .catrow input{width:100%;box-sizing:border-box;min-width:0}
 .catact{display:flex;gap:6px;flex-wrap:wrap}
 @media (max-width:700px){.catrow{grid-template-columns:1fr}}
+
+/* 首頁公告橫幅 */
+.annbar{display:flex;align-items:center;gap:12px;width:calc(100% - 28px);max-width:1240px;margin:14px auto 0;padding:10px 14px;border:1px solid var(--line);border-radius:8px;background:var(--card,var(--paper,#fff));color:inherit}
+.annbar a,.annbar>div{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;color:inherit;text-decoration:none}
+.annbar b{font-weight:700}
+.annbar span:not(.annic){opacity:.82}
+.annic{flex:none;font-size:12px;letter-spacing:.12em;padding:2px 9px;border-radius:999px;border:1px solid var(--bronze-text,currentColor);color:var(--bronze-text,inherit)}
+.annx{flex:none;border:0;background:transparent;color:inherit;font-size:22px;line-height:1;cursor:pointer;opacity:.6;padding:2px 6px}
+.annx:hover{opacity:1}
+.annbar+.hero{margin-top:10px}
+@media (max-width:760px){.annbar{width:calc(100% - 20px);margin-top:10px}}
+
+/* 新用戶導覽與新手任務 */
+.tour{position:fixed;inset:0;z-index:400}
+.tour.nohole{background:rgba(10,14,22,.58)}
+.tour-hole{position:fixed;border-radius:10px;box-shadow:0 0 0 9999px rgba(10,14,22,.58),0 0 0 2px var(--bronze-b);pointer-events:none;transition:top .2s,left .2s,width .2s,height .2s}
+.tour.nohole .tour-hole{display:none}
+.tour-card{position:fixed;width:min(340px,calc(100vw - 24px));box-sizing:border-box;padding:16px 18px 14px;border-radius:12px;background:var(--card);color:var(--text);border:1px solid var(--line-strong);box-shadow:var(--shadow);outline:none}
+.tour-card b{display:block;font-family:var(--font-serif);font-size:18px;margin:6px 0 4px}
+.tour-card p{margin:0 0 12px;font-size:14.5px;line-height:1.7;color:var(--text-soft)}
+.tour-dots{display:flex;gap:6px}
+.tour-dots i{width:6px;height:6px;border-radius:50%;background:var(--line-strong)}
+.tour-dots i.on{background:var(--bronze-b);width:16px;border-radius:3px}
+.tour-act{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.tour-act .more{opacity:.8}
+.startcard{margin:0 0 20px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:color-mix(in srgb,var(--card) 70%,var(--paper))}
+.sc-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.sc-h b{font-family:var(--font-serif);font-size:16px}
+.sc-bar{flex:1;min-width:80px;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.sc-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--bronze-a),var(--bronze-b))}
+.startcard ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.startcard li{display:flex;align-items:center;gap:10px;font-size:14.5px}
+.startcard li em{margin-left:auto;font-style:normal}
+.sc-ck{flex:none;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line-strong);display:grid;place-items:center;font-size:12px;color:var(--on-bronze)}
+.startcard li.done .sc-ck{background:var(--bronze-b);border-color:var(--bronze-b)}
+.startcard li.done .sc-t{color:var(--text-soft);text-decoration:line-through}
+.tourhint{position:fixed;right:14px;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:90;max-width:min(360px,calc(100vw - 28px));display:flex;gap:10px 14px;align-items:center;flex-wrap:wrap;padding:12px 14px;border-radius:12px;background:var(--card);border:1px solid var(--line-strong);box-shadow:var(--shadow)}
+.tourhint b{font-family:var(--font-serif)}
+.tourhint p{margin:2px 0 0;font-size:13.5px;color:var(--text-soft)}
+@media (prefers-reduced-motion:reduce){.tour-hole{transition:none}}
