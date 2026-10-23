@@ -1117,3 +1117,9 @@ html.ld:not(.ld-out) .hero *,html.ld:not(.ld-out) .hero::before,html.ld:not(.ld-
   .hero.play .hero-art::before,.hero.play .hero-art::after{animation:none!important}
   #loader{display:none!important}
 }
+
+/* 後台:刪除作文按鈕(二段確認) */
+.gdel{width:100%;margin-top:10px;color:#9B2C2C;border-color:color-mix(in srgb,#9B2C2C 45%,transparent)}
+.gdel:hover{background:color-mix(in srgb,#9B2C2C 10%,transparent);border-color:#9B2C2C}
+.gdel.armed{background:#9B2C2C;color:#fff;border-color:#9B2C2C}
+.gdel:disabled{opacity:.6}

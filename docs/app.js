@@ -1216,7 +1216,21 @@ function initAdmin(){
       '<label class="fld" for="gFb">文字評語<textarea id="gFb" rows="6" maxlength="4000" placeholder="寫給學生的評語與建議">'+esc(e.feedback||'')+'</textarea></label>'+
       '<div class="tplSave"><button type="button" class="more" id="tplAdd">＋ 把目前評語存成範本</button><span id="tplForm" hidden><input id="tplLabel" maxlength="20" placeholder="範本名稱(20 字內)"> <button type="button" class="btn btn-line sm" id="tplOk">存</button></span></div>'+
       '<label class="fld" for="gFile">批改後的照片(選填,JPG / PNG / WebP)<input id="gFile" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>'+
-      '<div class="err" id="gErr" role="alert"></div><button type="button" class="btn btn-fill" id="gGo" style="width:100%">'+(e.status==='graded'?'更新評語':'儲存並標為已批改')+'</button>',function(){
+      '<div class="err" id="gErr" role="alert"></div><button type="button" class="btn btn-fill" id="gGo" style="width:100%">'+(e.status==='graded'?'更新評語':'儲存並標為已批改')+'</button><button type="button" class="btn btn-line gdel" id="gDel">刪除這篇作文</button>',function(){
+        var delArm=0,delT;
+        $('#gDel').addEventListener('click',async function(){
+          var bt=this,er=$('#gErr');
+          if(!delArm){delArm=1;bt.textContent='再按一次,確定永久刪除(作文與照片都無法復原)';bt.classList.add('armed');clearTimeout(delT);delT=setTimeout(function(){delArm=0;bt.textContent='刪除這篇作文';bt.classList.remove('armed')},6000);return}
+          bt.disabled=true;bt.textContent='刪除中…';er.textContent='';
+          try{
+            var dr=await sb.from('essays').delete().eq('id',id).select('id');
+            if(dr.error)throw dr.error;
+            if(!dr.data||!dr.data.length)throw new Error('沒有刪除成功,請重新整理後再試');
+            var ps=files.map(function(f){return f.path});
+            if(ps.length){try{await sb.storage.from('essays').remove(ps)}catch(_){}}
+            closeDlg(modal);toast('已刪除「'+e.title+'」');render();tiles();
+          }catch(ex){er.textContent='刪除失敗:'+niceErr(ex);bt.disabled=false;delArm=0;bt.classList.remove('armed');bt.textContent='刪除這篇作文'}
+        });
         function drawTpl(){
           var row=$('#tplRow');if(!row)return;
           row.innerHTML=TPL.length?TPL.map(function(t){return '<span class="tplc"><button type="button" class="chip" data-tpl="'+t.id+'" title="'+esc(t.body)+'">'+esc(t.label)+'</button>'+(tplEdit?'<button type="button" class="tplx" data-tdel="'+t.id+'" aria-label="刪除範本 '+esc(t.label)+'">×</button>':'')+'</span>'}).join(''):'<span class="tnote">還沒有範本,寫好評語後可以存成範本。</span>';
