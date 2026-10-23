@@ -1178,3 +1178,7 @@ html.ld:not(.ld-out) .hero *,html.ld:not(.ld-out) .hero::before,html.ld:not(.ld-
 .ccedit .fld{display:block;margin:0 0 10px}
 .ccedit textarea,.ccedit input[type=text]{width:100%;box-sizing:border-box}
 .ccedit img{max-width:160px;border-radius:6px;display:block;margin:6px 0}
+
+/* 首頁大標:行楷毛筆字體(馬善政;繁體「為、來」由毛筆風的 Yuji Mai 補上) */
+.hero h1{font-family:"Ma Shan Zheng","Yuji Mai","Noto Serif TC",serif;font-weight:400;font-size:clamp(54px,6.6vw,96px);line-height:1.12;letter-spacing:.06em}
+@media (max-width:860px){.hero h1{font-size:clamp(46px,14vw,68px)}}

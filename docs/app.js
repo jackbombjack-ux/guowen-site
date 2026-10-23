@@ -532,6 +532,8 @@ function applyProductContent(){
       if(g)g.coverUrl=mediaUrl(r.cover_path);
       $$('img[data-pimg="'+id+'"]').forEach(function(im){im.src=mediaUrl(r.cover_path)});
     }
+    if(r.meta){$$('#card-'+id+' .pmeta').forEach(function(el){el.textContent=r.meta});var pm=$('.pd-info [data-price="'+id+'"]');if(pm){var pe=$('.pd-meta');if(pe&&pe.id!=='dMeta')pe.textContent=r.meta}}
+    if(r.tagline)$$('#card-'+id+' .pbody p').forEach(function(el){el.textContent=r.tagline});
     if(r.intro&&(e=$('[data-pintro="'+id+'"]')))e.textContent=r.intro;
     if(Array.isArray(r.feats)&&r.feats.length&&(e=$('[data-pfeats="'+id+'"]')))
       e.innerHTML=r.feats.map(function(x){return '<li>'+esc(x)+'</li>'}).join('');
@@ -1604,6 +1606,7 @@ function initAdmin(){
       var orig=[db.cover_path].concat((Array.isArray(db.gallery)?db.gallery:[]).map(function(x){return x.path})).filter(Boolean);
       EDS[id]=S;
       host.innerHTML='<div class="ped">'+
+        '<div class="ped-top"><label class="fld">分類說明(教材卡片與教材頁上的小字,例如「108–115 學測・內文約 157 頁」)<input type="text" data-e="meta" maxlength="80"></label><label class="fld">卡片簡短說明(教材列表卡片上的兩三行介紹)<textarea data-e="tagline" rows="2" maxlength="120"></textarea></label></div>'+
         '<div class="ped-row"><div class="ped-cov"><b>封面圖</b><img data-ecov alt="目前封面"><label class="btn btn-line sm ped-up">上傳新封面<input type="file" accept="image/*" data-efile="cover" hidden></label><small>建議直式、比例約 7:10;太大的圖會自動縮小。</small></div>'+
         '<div class="ped-txt"><label class="fld">內容簡介<textarea data-e="intro" rows="3"></textarea></label>'+
         '<label class="fld">本書特色(一行一點)<textarea data-e="feats" rows="6"></textarea></label></div></div>'+
@@ -1611,6 +1614,8 @@ function initAdmin(){
         '<div class="ped-gal"><b>內頁與介紹圖</b><div data-egal></div><label class="btn btn-line sm ped-up">新增圖片(可一次選多張)<input type="file" accept="image/*" multiple data-efile="gal" hidden></label></div>'+
         '<div class="ped-act"><button type="button" class="btn btn-fill sm" data-esave>儲存內容</button> <button type="button" class="btn btn-line sm" data-ereset>還原為預設內容</button><span class="mfoot" data-emsg></span></div></div>';
       var $e=function(sel){return $(sel,host)};
+      $e('[data-e=meta]').value=db.meta!=null?db.meta:(g.dyn?'':(g.meta||''));
+      $e('[data-e=tagline]').value=db.tagline!=null?db.tagline:(g.dyn?'':(g.tagline||''));
       $e('[data-e=intro]').value=db.intro!=null?db.intro:D.intro;
       $e('[data-e=feats]').value=(Array.isArray(db.feats)?db.feats:D.feats).join('\n');
       $e('[data-e=toc]').value=tocToText(Array.isArray(db.toc)?db.toc:D.toc);
@@ -1646,7 +1651,10 @@ function initAdmin(){
       });
       $e('[data-esave]').addEventListener('click',async function(){
         var intro=$e('[data-e=intro]').value.trim(),feats=linesToList($e('[data-e=feats]').value),toc=textToToc($e('[data-e=toc]').value);
+        var mv=$e('[data-e=meta]').value.trim(),tv=$e('[data-e=tagline]').value.trim();
         var patch={
+          meta:(!mv||mv===(g.dyn?'':(g.meta||'')))?null:mv,
+          tagline:(!tv||tv===(g.dyn?'':(g.tagline||'')))?null:tv,
           cover_path:S.cover||null,
           intro:(!intro||intro===D.intro)?null:intro,
           feats:(!feats.length||same(feats,D.feats))?null:feats,
@@ -1664,10 +1672,10 @@ function initAdmin(){
       });
       $e('[data-ereset]').addEventListener('click',async function(){
         if(!window.confirm('要把「'+g.name+'」的封面、簡介、特色、目錄與內頁圖全部還原成網站內建的內容嗎?')){return}
-        var u=await sb.from('products').update({cover_path:null,intro:null,feats:null,toc:null,gallery:null}).eq('id',id);
+        var u=await sb.from('products').update({meta:null,tagline:null,cover_path:null,intro:null,feats:null,toc:null,gallery:null}).eq('id',id);
         if(u.error){toast('還原失敗:'+niceErr(u.error));return}
         if(orig.length){try{await sb.storage.from('product-media').remove(orig)}catch(_){}}
-        Object.assign(db,{cover_path:null,intro:null,feats:null,toc:null,gallery:null});delete EDS[id];
+        Object.assign(db,{meta:null,tagline:null,cover_path:null,intro:null,feats:null,toc:null,gallery:null});delete EDS[id];
         openEditor(id,host);toast('已還原為預設內容');
       });
       drawCover();drawGal();
