@@ -1142,3 +1142,22 @@ html.ld:not(.ld-out) .hero *,html.ld:not(.ld-out) .hero::before,html.ld:not(.ld-
 .pushcard p{margin:4px 0 0;font-size:14px;line-height:1.75;color:var(--text-soft)}
 .pushcard .pact{display:flex;gap:8px;flex-wrap:wrap}
 .pushcard[data-st="on"]{border-color:var(--bronze-b)}
+
+/* 課程頁封面:背景水墨圖要鋪滿整個方框(之前被封面圖的比例與 contain 設定擠成只佔中間一塊) */
+.cd-art img.sc{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:auto;object-fit:cover;object-position:50% 72%;border-radius:0;box-shadow:none}
+
+/* 首頁主視覺(淺色模式):標語與說明文字加深、加寬底色遮罩與柔光,和水墨山水區隔開;深色模式維持原樣 */
+.hero-fade{background:radial-gradient(78% 108% at 14% 50%,rgba(248,245,238,.95) 0%,rgba(248,245,238,.84) 38%,rgba(248,245,238,.46) 66%,transparent 90%)}
+.hero h1{text-shadow:0 0 22px rgba(248,245,238,.95),0 0 6px rgba(248,245,238,.9),0 2px 0 rgba(255,255,255,.5)}
+.hero .hero-tag,.hero .sub{text-shadow:0 0 14px rgba(248,245,238,.98),0 0 5px rgba(248,245,238,.95)}
+.hero .hero-tag{color:#6b4d12}
+.hero .sub{color:#171C27;font-weight:600}
+:root[data-theme="dark"] .hero h1,:root[data-theme="dark"] .hero .hero-tag,:root[data-theme="dark"] .hero .sub{text-shadow:none}
+:root[data-theme="dark"] .hero .hero-tag{color:var(--bronze-text)}
+:root[data-theme="dark"] .hero .sub{color:var(--text);font-weight:inherit}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .hero h1,:root:not([data-theme="light"]) .hero .hero-tag,:root:not([data-theme="light"]) .hero .sub{text-shadow:none}
+  :root:not([data-theme="light"]) .hero .hero-tag{color:var(--bronze-text)}
+  :root:not([data-theme="light"]) .hero .sub{color:var(--text);font-weight:inherit}
+}
+@media (max-width:860px){.hero-fade{background:radial-gradient(120% 90% at 30% 40%,rgba(248,245,238,.93) 0%,rgba(248,245,238,.8) 50%,rgba(248,245,238,.4) 80%,transparent 100%)}}

@@ -544,16 +544,30 @@ function applyProductContent(){
 function tagPrice(){
   $$('[data-price]').forEach(function(el){var p=byId(GW.products,el.getAttribute('data-price'));if(p)el.textContent=p.price.toLocaleString('en-US')});
 }
+/* 課程章節:以後台設定為準(老師新增或改名章節後,課程頁與課程卡片的章節數、章節清單同步) */
+function applyChapters(){
+  var CH=PUB.chapters||{};
+  Object.keys(CH).forEach(function(id){
+    var list=CH[id];if(!list||!list.length)return;
+    $$('#card-'+id+' .c-meta span').slice(0,1).forEach(function(sp){sp.textContent=list.length+' 個章節'});
+    var b=$('#enrollBtn');
+    if(b&&b.getAttribute('data-course')===id){
+      var ol=$('.chlist');if(ol)ol.innerHTML=list.map(function(c){return '<li>'+esc(c.title)+'</li>'}).join('');
+      $$('dt').forEach(function(dt){if(dt.textContent.trim()==='章節數'&&dt.nextElementSibling)dt.nextElementSibling.textContent=list.length+' 個章節'});
+    }
+  });
+}
 async function loadPublic(){
   try{
     var rs=await Promise.all([
       sb.from('products').select('id,price,active,kind,cover_path,intro,feats,toc,gallery'),sb.from('courses').select('id,price,status'),
       sb.from('plans').select('id,name,amount,period_type,frequency,active'),sb.from('site_settings').select('key,value'),
-      sb.from('resources').select('id,name,gate,storage_path,href')]);
+      sb.from('resources').select('id,name,gate,storage_path,href'),sb.from('course_chapters').select('course_id,position,title').order('position')]);
     (rs[0].data||[]).forEach(function(r){PUB.products[r.id]=r;var p=byId(GW.products,r.id);if(p)p.price=r.price});
     (rs[1].data||[]).forEach(function(r){PUB.courses[r.id]=r});
     (rs[2].data||[]).forEach(function(r){PUB.plans[r.id]=r});
     (rs[4].data||[]).forEach(function(r){PUB.resources[r.id]=r});
+    var CH={};(rs[5].data||[]).forEach(function(r){(CH[r.course_id]=CH[r.course_id]||[]).push(r)});PUB.chapters=CH;
     (rs[3].data||[]).forEach(function(r){
       if(r.key==='payments_enabled')PUB.pay=(r.value===true);
       if(r.key==='live_retention_days'&&typeof r.value==='number')PUB.liveDays=r.value;
@@ -562,6 +576,7 @@ async function loadPublic(){
     });
   }catch(e){}
   tagPrice();applyProductContent();
+  applyChapters();
   Object.keys(PUB.products).forEach(function(id){
     if(!PUB.products[id].active)$$('[data-add="'+id+'"]').forEach(function(b){b.classList.add('off');b.setAttribute('title','暫時無法購買')});
   });
@@ -1000,7 +1015,12 @@ function initEssay(){
     var box=$('#myEssays');if(!box)return;
     if(!U){box.innerHTML='<li class="none">登入後可以看到你的上傳紀錄</li>';return}
     var my=++seq,es=await fetchMyEssays();if(my!==seq)return;
-    box.innerHTML=es.length?es.map(function(e){var n=e.essay_files.filter(function(f){return f.kind==='submission'}).length;return '<li><span>'+esc(e.title)+'('+esc(e.grade||'')+'・'+n+' 張・'+dateShort(e.created_at)+')</span><em>'+STATUS_ES[e.status]+(scoreTx(e)?'・'+scoreTx(e)+' 分':'')+'</em></li>'}).join(''):'<li class="none">還沒有上傳紀錄</li>';
+    var gp=[];es.forEach(function(e){if(e.status==='graded')e.essay_files.forEach(function(f){if(f.kind==='feedback')gp.push(f.path)})});
+    var sm=gp.length?await signedMap(gp):{};if(my!==seq)return;
+    if(es.some(function(x){return x.status==='graded'&&!x.student_seen_at})){sb.rpc('mark_essays_seen').then(function(){UNSEEN=0})}
+    box.innerHTML=es.length?es.map(function(e){var n=e.essay_files.filter(function(f){return f.kind==='submission'}).length;
+      var fb=e.status==='graded'?'<div class="fbk"><b>老師評語</b><p>'+esc(e.feedback||'(老師已批改,沒有文字評語)').replace(/\n/g,'<br>')+'</p>'+e.essay_files.filter(function(f){return f.kind==='feedback'&&sm[f.path]}).sort(function(a,b){return a.page_no-b.page_no}).map(function(f){return '<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="老師批改照片" loading="lazy"></a>'}).join('')+'</div>':'';
+      return '<li class="col"><div class="l1"><span>'+esc(e.title)+'('+esc(e.grade||'')+'・'+n+' 張・'+dateShort(e.created_at)+')</span><em>'+(e.status==='graded'&&!e.student_seen_at?'<span class="newpill">新批改</span>':'')+STATUS_ES[e.status]+(scoreTx(e)?'・'+scoreTx(e)+' 分':'')+'</em></div>'+fb+'</li>'}).join(''):'<li class="none">還沒有上傳紀錄</li>';
   }
   function render(){
     if(!ready){p.innerHTML='<h3>上傳作文</h3><p class="lead">載入中…</p>';return}
