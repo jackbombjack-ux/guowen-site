@@ -505,6 +505,12 @@ function niceErr(e){
   if(/Failed to fetch|NetworkError|network/i.test(m))return '網路連線不穩,請稍後再試。';
   if(/row-level security|permission denied/i.test(m))return '沒有權限執行這個動作。';
   if(/duplicate key/i.test(m))return '資料已存在。';
+  if(/essay_no_credits/.test(m))return '這個方案的批改次數已經用完了。';
+  if(/essay_pay_code_required/.test(m))return '請填寫轉帳帳號後五碼(或優惠碼)。';
+  if(/essay_purchase_invalid|essay_purchase_required/.test(m))return '這個方案已取消或無法使用,請聯絡老師。';
+  if(/too_many_pending/.test(m))return '你有太多尚未上傳的方案,請先使用現有方案,或聯絡老師。';
+  if(/plan_not_found/.test(m))return '找不到這個方案,請重新整理後再選。';
+  if(/login_required/.test(m))return '請先登入。';
   return m||'系統忙碌,請稍後再試。';
 }
 async function callFn(name,body){
@@ -866,6 +872,7 @@ async function loadPublic(){
       if(r.key==='live_retention_days'&&typeof r.value==='number')PUB.liveDays=r.value;
       if(r.key==='line_url'&&r.value)CONFIG.lineUrl=r.value;
       if(r.key==='youtube_url'&&r.value)CONFIG.youtubeUrl=r.value;
+      if(r.key==='bank_info'&&typeof r.value==='string')PUB.bank=r.value;
     });
   }catch(e){}
   renderDyn();
@@ -1366,9 +1373,35 @@ async function fetchMyEssays(){
 function scoreTx(e){return e&&e.score!=null&&e.score_max!=null?(+e.score)+' / '+(+e.score_max):''}
 function dateShort(t){var d=new Date(t);return (d.getMonth()+1)+'/'+d.getDate()}
 
+var ELV={
+  elem:{name:'國小作文',sub:'國小三~六年級',grades:['國小三年級','國小四年級','國小五年級','國小六年級'],img:'images/essay-elem.jpg',alt:'國小作文成長精批方案:單篇精批與 10 篇成長方案',hot:[[6.8,48,42.4,43],[50.6,48,44.3,43]]},
+  junior:{name:'國中作文',sub:'國一~國三・會考作文',grades:['國一','國二','國三'],img:'images/essay-junior.jpg',alt:'國中作文專業精批服務:單篇精批與 10 篇會考作文精批方案',hot:[[6.8,47,42.4,44],[50.8,48,44.1,43]]},
+  senior:{name:'高中國寫',sub:'高一~高三・學測國寫',grades:['高一','高二','高三'],img:'images/essay-senior.jpg',alt:'高中國寫專業精批服務:單次精批與學測國寫精批方案',hot:[[9,48.8,39.8,40.5],[50.6,48.8,44.1,40.5]]}
+};
+var ESS_KEY='gw-essay-plan';
 function initEssay(){
-  var p=$('#uPanel');if(!p)return;
-  var seq=0;
+  var w=$('#ewiz'),p=$('#uPanel'),up=$('#eUp');if(!p||!w||!up)return;
+  var ST={view:'level',level:null,plan:null,pid:null},PLANS=[],MYP=[],seq=0,loaded=false;
+  function money(n){return 'NT$'+(+n).toLocaleString('en-US')}
+  function left(x){return x.credits_total-x.credits_used}
+  function usable(x){return x.status!=='cancelled'&&left(x)>0}
+  function planBy(id){return PLANS.filter(function(x){return x.id===id})[0]}
+  function levelPlans(l){return PLANS.filter(function(x){return x.level===l}).sort(function(a,b){return a.sort-b.sort})}
+  function lvName(l){return ELV[l]?ELV[l].name:''}
+  function ssGet(){try{return sessionStorage.getItem(ESS_KEY)}catch(_){return null}}
+  function ssSet(v){try{if(v)sessionStorage.setItem(ESS_KEY,v);else sessionStorage.removeItem(ESS_KEY)}catch(_){}}
+  function payPill(x){return '<i class="pill'+(x.status==='confirmed'?' ok':' warn')+'">'+(x.status==='confirmed'?'已確認收款':'待老師核對收款')+'</i>'}
+  async function load(){
+    if(!sb){PLANS=[];MYP=[];loaded=true;return}
+    var r=await sb.from('essay_plans').select('id,level,kind,name,price,list_price,credits,sort,active').order('sort');
+    PLANS=(r&&r.data)||[];
+    if(U){var m=await sb.from('essay_purchases').select('id,plan_id,level,plan_name,amount,credits_total,credits_used,pay_code,status,created_at').eq('user_id',U.id).order('created_at',{ascending:false});MYP=(m&&m.data)||[]}
+    else MYP=[];
+    loaded=true;
+    var want=ssGet();
+    if(U&&want&&planBy(want)&&ST.view==='level'){ST.plan=want;ST.level=planBy(want).level;ST.view='pay'}
+  }
+  async function refresh(){try{await load()}catch(_){loaded=true}draw()}
   async function listMine(){
     var box=$('#myEssays');if(!box)return;
     if(!U){box.innerHTML='<li class="none">登入後可以看到你的上傳紀錄</li>';return}
@@ -1377,25 +1410,85 @@ function initEssay(){
     var sm=gp.length?await signedMap(gp):{};if(my!==seq)return;
     if(es.some(function(x){return x.status==='graded'&&!x.student_seen_at})){sb.rpc('mark_essays_seen').then(function(){UNSEEN=0})}
     box.innerHTML=es.length?es.map(function(e){var n=e.essay_files.filter(function(f){return f.kind==='submission'}).length;
-      var fb=e.status==='graded'?'<div class="fbk"><b>老師評語</b><p>'+esc(e.feedback||'(老師已批改,沒有文字評語)').replace(/\n/g,'<br>')+'</p>'+e.essay_files.filter(function(f){return f.kind==='feedback'&&sm[f.path]}).sort(function(a,b){return a.page_no-b.page_no}).map(function(f){return '<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="老師批改照片" loading="lazy"></a>'}).join('')+'</div>':'';
+      var fb=e.status==='graded'?'<div class="fbk"><b>老師評語</b><p>'+esc(e.feedback||'(老師已批改,沒有文字評語)').replace(/\n/g,'<br>')+'</p>'+e.essay_files.filter(function(f){return f.kind==='feedback'&&sm[f.path]}).sort(function(a,b){return a.page_no-b.page_no}).map(function(f){return '<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="老師批改第 '+f.page_no+' 頁" loading="lazy"></a>'}).join('')+'</div>':'';
       return '<li class="col"><div class="l1"><span>'+esc(e.title)+'('+esc(e.grade||'')+'・'+n+' 張・'+dateShort(e.created_at)+')</span><em>'+(e.status==='graded'&&!e.student_seen_at?'<span class="newpill">新批改</span>':'')+STATUS_ES[e.status]+(scoreTx(e)?'・'+scoreTx(e)+' 分':'')+'</em></div>'+fb+'</li>'}).join(''):'<li class="none">還沒有上傳紀錄</li>';
   }
-  function render(){
-    if(!ready){p.innerHTML='<h3>上傳作文</h3><p class="lead">載入中…</p>';return}
-    if(!U){
-      clearThumbs();
-      p.innerHTML='<h3>上傳作文</h3><p class="lead">登入後即可上傳,上傳的作文僅供本人與老師查看。</p><div class="lockmask"><svg class="ico" style="width:32px;height:32px;color:var(--bronze-text)"><use href="#i-lock"/></svg><p>請先使用 Google 帳號登入</p><button type="button" class="btn btn-fill" id="upLogin">使用 Google 帳號登入</button></div>';
-      $('#upLogin').addEventListener('click',function(){askLogin('登入後即可上傳作文')});
-      listMine();return;
+  function draw(){
+    if(!ready||!loaded){w.hidden=false;up.hidden=true;w.innerHTML='<p class="lead">載入中…</p>';listMine();return}
+    if(ST.view==='upload'){var pu=MYP.filter(function(x){return x.id===ST.pid})[0];if(!U||!pu||!usable(pu)){ST.view='level';ST.pid=null}}
+    var upl=ST.view==='upload';up.hidden=!upl;w.hidden=upl;
+    if(upl)drawUpload();else if(ST.view==='plans')drawPlans();else if(ST.view==='pay')drawPay();else drawLevel();
+    listMine();
+  }
+  /* 第一步:選擇階段 */
+  function drawLevel(){
+    var mine=MYP.filter(usable);
+    var h='<div class="ewz"><h2 class="ewz-t"><span>第一步</span>選擇學習階段</h2><p class="lead">先選要批改的作文類型,再選擇批改方案。</p><div class="elv">'+Object.keys(ELV).map(function(k){
+      var ps=levelPlans(k),min=ps.length?Math.min.apply(null,ps.map(function(x){return x.price})):0;
+      return '<button type="button" class="elv-c" data-lv="'+k+'"><b>'+ELV[k].name+'</b><span>'+ELV[k].sub+'</span>'+(ps.length?'<em>'+money(min)+' 起</em>':'')+'</button>'}).join('')+'</div>';
+    if(U&&mine.length){
+      h+='<div class="emine"><h3>我已購買的方案</h3><p class="lead">已購買的方案不用重新付款,直接上傳,系統會自動扣除一次。</p><ul>'+mine.map(function(x){
+        return '<li><div><b>'+esc(lvName(x.level))+'・'+esc(x.plan_name)+'</b><span>剩餘 <strong>'+left(x)+'</strong> / '+x.credits_total+' 次 '+payPill(x)+'</span></div><button type="button" class="btn btn-fill sm" data-use="'+esc(x.id)+'">直接上傳作文</button></li>'}).join('')+'</ul></div>';
+    }else if(!U){
+      h+='<p class="mfoot" style="margin-top:14px">已經購買過方案的話,<button type="button" class="more" data-wlogin>登入</button>後就能看到剩餘次數並直接上傳。</p>';
     }
-    p.innerHTML='<h3>上傳作文</h3><p class="lead">上傳的作文僅供本人與老師查看。</p>'+
-     '<form id="upForm" novalidate><div class="row2"><label class="fld" for="upTitle">作文題目<input id="upTitle" placeholder="例如:溫暖的心" maxlength="60"></label><label class="fld" for="upGrade">年級<select id="upGrade"><option>國一</option><option>國二</option><option>國三</option><option>高一</option><option>高二</option><option selected>高三</option><option>其他</option></select></label></div>'+
+    w.innerHTML=h+'</div>';
+    $$('[data-lv]',w).forEach(function(b){b.addEventListener('click',function(){ST.level=b.getAttribute('data-lv');ST.view='plans';draw();w.scrollIntoView({block:'start'})})});
+    $$('[data-use]',w).forEach(function(b){b.addEventListener('click',function(){ST.pid=b.getAttribute('data-use');ST.view='upload';draw();up.scrollIntoView({block:'start'})})});
+    var wl=$('[data-wlogin]',w);if(wl)wl.addEventListener('click',function(){askLogin('登入後可以看到已購買的方案與剩餘次數')});
+  }
+  /* 第二步:選方案(圖上疊按鈕 + 圖下按鈕) */
+  function drawPlans(){
+    var L=ELV[ST.level],ps=levelPlans(ST.level),single=ps.filter(function(x){return x.kind==='single'})[0],pack=ps.filter(function(x){return x.kind==='pack'})[0];
+    var h='<div class="ewz"><button type="button" class="more eback" data-back>← 重新選擇階段</button><h2 class="ewz-t"><span>第二步</span>選擇'+L.name+'批改方案</h2>';
+    if(!single&&!pack){w.innerHTML=h+'<p class="lead">這個階段的方案還沒有開放,請稍後再來,或<a href="contact.html" style="text-decoration:underline">聯絡老師</a>。</p></div>';
+      $('[data-back]',w).addEventListener('click',function(){ST.view='level';draw()});return}
+    h+='<p class="lead">點選圖中的方案,或按下面的按鈕。</p><figure class="eplan"><img src="'+L.img+'" alt="'+esc(L.alt)+'" width="1000" height="1000">'+
+      [single,pack].map(function(pl,i){return pl?'<button type="button" class="ehot" data-plan="'+esc(pl.id)+'" style="left:'+L.hot[i][0]+'%;top:'+L.hot[i][1]+'%;width:'+L.hot[i][2]+'%;height:'+L.hot[i][3]+'%" aria-label="選擇'+esc(pl.name)+' '+money(pl.price)+'"></button>':''}).join('')+'</figure>'+
+      '<div class="eplan-btns">'+[single,pack].filter(Boolean).map(function(pl){return '<button type="button" class="btn '+(pl.kind==='pack'?'btn-fill':'btn-line')+'" data-plan="'+esc(pl.id)+'">選擇「'+esc(pl.name)+'」 '+money(pl.price)+(pl.list_price?'(原價 '+money(pl.list_price)+')':'')+'</button>'}).join('')+'</div></div>';
+    w.innerHTML=h;
+    $('[data-back]',w).addEventListener('click',function(){ST.view='level';draw()});
+    $$('[data-plan]',w).forEach(function(b){b.addEventListener('click',function(){ST.plan=b.getAttribute('data-plan');ST.view='pay';draw();w.scrollIntoView({block:'start'})})});
+  }
+  /* 第三步:匯款說明 */
+  function drawPay(){
+    var pl=planBy(ST.plan);if(!pl){ST.view='level';drawLevel();return}
+    var bank=(PUB.bank||'').trim(),amt=money(pl.price);
+    w.innerHTML='<div class="ewz"><button type="button" class="more eback" data-back>← 重新選擇方案</button><h2 class="ewz-t"><span>第三步</span>匯款付款</h2>'+
+      '<div class="epay"><div class="epay-sum"><h3>購買方案</h3><dl><dt>方案</dt><dd>'+esc(lvName(pl.level))+'・'+esc(pl.name)+'</dd><dt>可批改次數</dt><dd>'+pl.credits+' 次</dd><dt>應付金額</dt><dd class="amt">'+amt+'</dd></dl></div>'+
+      '<div class="epay-bank"><h3>匯款資訊</h3>'+(bank?'<pre>'+esc(bank)+'</pre>':'<p>匯款帳戶資訊準備中,請先<a href="contact.html" style="text-decoration:underline">聯絡老師</a>取得匯款資訊。</p>')+'</div></div>'+
+      '<div class="epay-notes"><h3>匯款說明</h3><ol><li>請依上方資訊匯款「'+amt+'」。</li><li>匯款完成後,記下<b>轉帳帳號後五碼</b>(有優惠碼的話,填優惠碼也可以)。下一步上傳作文時要填寫,老師會用它核對款項。</li><li>老師核對收款後開始批改,結果會顯示在會員專區。</li>'+(pl.credits>1?'<li>這是 '+pl.credits+' 次方案:之後再上傳作文不用重新付款,系統會自動扣除剩餘次數,登入後在這個頁面就能看到。</li>':'')+'</ol></div>'+
+      '<div class="eact"><button type="button" class="btn btn-fill" data-paid>我已匯款,前往上傳作文</button><span class="err" id="payErr" role="alert"></span></div></div>';
+    $('[data-back]',w).addEventListener('click',function(){ssSet(null);ST.view='plans';draw()});
+    $('[data-paid]',w).addEventListener('click',async function(){
+      var btn=this,er=$('#payErr');er.textContent='';
+      if(!U){ssSet(ST.plan);askLogin('登入後才能登記你的方案並上傳作文');return}
+      btn.disabled=true;
+      try{
+        var ex=MYP.filter(function(x){return x.plan_id===ST.plan&&x.status==='pending'&&!x.credits_used&&!x.pay_code})[0],pid=ex&&ex.id;
+        if(!pid){
+          var r=await sb.rpc('buy_essay_plan',{p_plan:ST.plan});
+          if(r.error)throw r.error;
+          pid=r.data&&r.data.id;if(!pid)throw new Error('建立方案失敗,請稍後再試。');
+        }
+        ssSet(null);await load();ST.pid=pid;ST.view='upload';draw();up.scrollIntoView({block:'start'});
+      }catch(ex2){er.textContent=niceErr(ex2);btn.disabled=false}
+    });
+  }
+  /* 第四步:上傳作文 */
+  function drawUpload(){
+    var pu=MYP.filter(function(x){return x.id===ST.pid})[0],L=ELV[pu.level]||ELV.senior;
+    p.innerHTML='<button type="button" class="more eback" data-back>← 回方案選擇</button><div class="epbar"><b>'+esc(L.name)+'・'+esc(pu.plan_name)+'</b><span>剩餘 <strong>'+left(pu)+'</strong> / '+pu.credits_total+' 次 '+payPill(pu)+'</span></div>'+
+     '<h3>上傳作文</h3><p class="lead">上傳的作文僅供本人與老師查看。'+(pu.level==='senior'?'高中國寫每次批改,請一次上傳知性題與情意題各 1 篇。':'')+'</p>'+
+     '<form id="upForm" novalidate><div class="row2"><label class="fld" for="upTitle">作文題目<input id="upTitle" placeholder="例如:溫暖的心" maxlength="60"></label><label class="fld" for="upGrade">年級<select id="upGrade">'+L.grades.map(function(g){return '<option>'+g+'</option>'}).join('')+'</select></label></div>'+
+     (pu.pay_code?'<p class="epaid">已登記轉帳後五碼/優惠碼:<b>'+esc(pu.pay_code)+'</b></p>':'<label class="fld" for="upCode">轉帳帳號後五碼或優惠碼(必填)<input id="upCode" maxlength="30" autocomplete="off" placeholder="例如:12345,或你的優惠碼"></label>')+
      '<label class="drop" id="drop" for="upFile">'+ico('i-upload')+'<span><b>點選選擇照片</b>,或把照片拖曳到這裡</span><span style="font-size:12.5px">最多 '+MAXF+' 張・每張 '+MAXMB+' MB 以內・JPG / PNG / WebP</span><input id="upFile" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>'+
      '<div class="thumbs" id="thumbs"></div>'+
      '<p class="chk" id="chkTip" hidden>送出前請<b>點一下縮圖放大</b>,確認每一頁字跡清楚、整頁完整沒有被裁掉,再按「送出批改」,以免照片模糊或不完整影響批閱。</p>'+
      '<div class="tips"><span>光線充足</span><span>整頁入鏡</span><span>避免反光與陰影</span><span>依頁碼順序上傳</span></div>'+
      '<label class="fld" for="upNote" style="margin-top:8px">給老師的話(選填)<textarea id="upNote" maxlength="500" placeholder="例如:想加強結尾的收束"></textarea></label>'+
      '<div class="err" id="upErr" role="alert"></div><button class="btn btn-fill" type="submit" id="upGo">送出批改</button></form>';
+    $('[data-back]',p).addEventListener('click',function(){clearThumbs();ST.view='level';ST.pid=null;draw();w.scrollIntoView({block:'start'})});
     var inp=$('#upFile'),drop=$('#drop');
     function drawThumbs(){
       $('#thumbs').innerHTML=upUrls.map(function(u,i){return '<div class="th"><img src="'+u+'" alt="作文第 '+(i+1)+' 頁"><button type="button" data-rmf="'+i+'" aria-label="移除第 '+(i+1)+' 張">×</button></div>'}).join('');
@@ -1413,19 +1506,24 @@ function initEssay(){
     drop.addEventListener('drop',function(e){if(e.dataTransfer)addFiles(e.dataTransfer.files)});
     drawThumbs();
     $('#upForm').addEventListener('submit',async function(e){
-      e.preventDefault();var err=$('#upErr'),t=$('#upTitle').value.trim(),go=$('#upGo');
+      e.preventDefault();var err=$('#upErr'),t=$('#upTitle').value.trim(),go=$('#upGo'),ce=$('#upCode'),code=pu.pay_code||(ce?ce.value.trim():'');
       if(!t){err.textContent='請填寫作文題目。';return}
+      if(!code||code.length<2){err.textContent='請填寫轉帳帳號後五碼(或優惠碼),老師會用它核對款項。';return}
       if(!upFiles.length){err.textContent='請至少上傳一張作文照片。';return}
       go.disabled=true;go.textContent='上傳中…';err.textContent='';
       try{
-        var newId=await submitEssay({student_id:U.id,created_by:U.id,source:'student',title:t,grade:$('#upGrade').value,note:$('#upNote').value.trim()||null,status:'pending'},upFiles);
+        var newId=await submitEssay({student_id:U.id,created_by:U.id,source:'student',title:t,grade:$('#upGrade').value,note:$('#upNote').value.trim()||null,status:'pending',purchase_id:pu.id,pay_code:code},upFiles);
         transcribeEssay(newId);
-        var n=upFiles.length;clearThumbs();render();toast('已收到「'+t+'」共 '+n+' 張,老師批改後可在會員專區查看');
+        var n=upFiles.length;clearThumbs();
+        try{await load()}catch(_){}
+        var np=MYP.filter(function(x){return x.id===pu.id})[0],rest=np?left(np):0;
+        toast('已收到「'+t+'」共 '+n+' 張,老師核對收款並批改後,可在會員專區查看'+(np&&np.credits_total>1?(rest>0?'(此方案剩餘 '+rest+' 次)':'(此方案次數已用完)'):''));
+        draw();
       }catch(ex){err.textContent='上傳失敗:'+niceErr(ex);go.disabled=false;go.textContent='送出批改'}
     });
-    listMine();
   }
-  onAuth.push(render);render();
+  onAuth.push(function(){loaded=false;refresh()});
+  draw();refresh();
 }
 
 /* ---------- 會員專區 ---------- */
@@ -1683,6 +1781,7 @@ function initAdmin(){
   var app=$('#adminApp');if(!app)return;
   var aTab='e',tf={who:'',title:'',grade:'國三',open:false},tFiles=[],tUrls=[],names={};
   function clearT(){tUrls.forEach(function(u){URL.revokeObjectURL(u)});tUrls=[];tFiles=[]}
+  function lvLabel(l){return ELV[l]?ELV[l].name:''}
   function nm(id){return id&&names[id]?names[id].name||names[id].email:'(未知)'}
   async function loadNames(){var r=await sb.from('profiles').select('id,name,email,created_at,role');(r.data||[]).forEach(function(x){names[x.id]=x});return r.data||[]}
   async function count(table,filter){var q=sb.from(table).select('id',{count:'exact',head:true});if(filter)q=filter(q);var r=await q;return r.count||0}
@@ -1691,7 +1790,7 @@ function initAdmin(){
     if(!ready){app.innerHTML='<div class="gate"><p>載入中…</p></div>';return}
     if(!U){app.innerHTML='<div class="gate"><h2>老師後台</h2><p>請使用老師的 Google 帳號登入。</p><button type="button" class="btn btn-fill" id="admLogin">使用 Google 帳號登入</button></div>';$('#admLogin').addEventListener('click',function(){askLogin('請用老師的 Google 帳號登入後台')});return}
     if(!isAdmin()){app.innerHTML='<div class="gate"><h2>沒有權限</h2><p>這個帳號('+esc(U.email)+')不是老師帳號。</p><a class="btn btn-line" href="member.html">回會員專區</a></div>';return}
-    app.innerHTML='<div class="tiles" id="tiles"></div><div id="ocrAlert"></div><div class="tabs" role="tablist" style="max-width:860px">'+[['e','作文批改'],['o','訂單'],['m','會員'],['p','教材'],['c','課程'],['l','直播'],['n','公告'],['s','設定']].map(function(t){return '<button type="button" role="tab" data-at="'+t[0]+'" aria-selected="'+(aTab===t[0])+'">'+t[1]+'</button>'}).join('')+'</div><div class="panel" id="aBody"><p>載入中…</p></div><p class="mfoot"><button type="button" class="more" id="admOut">登出</button></p>';
+    app.innerHTML='<div class="tiles" id="tiles"></div><div id="ocrAlert"></div><div class="tabs" role="tablist" style="max-width:860px">'+[['e','作文批改'],['pp','作文方案'],['o','訂單'],['m','會員'],['p','教材'],['c','課程'],['l','直播'],['n','公告'],['s','設定']].map(function(t){return '<button type="button" role="tab" data-at="'+t[0]+'" aria-selected="'+(aTab===t[0])+'">'+t[1]+'</button>'}).join('')+'</div><div class="panel" id="aBody"><p>載入中…</p></div><p class="mfoot"><button type="button" class="more" id="admOut">登出</button></p>';
     $$('[data-at]',app).forEach(function(b){b.addEventListener('click',function(){aTab=b.getAttribute('data-at');render()})});
     $('#admOut').addEventListener('click',signOut);
     tiles();ocrAlert();
@@ -1717,8 +1816,10 @@ function initAdmin(){
   /* --- 作文 --- */
   TABS.e=async function(body){
     await loadNames();
-    var r=await sb.from('essays').select('id,student_id,source,source_note,title,grade,note,status,feedback,created_at,score,score_max,transcript,transcript_status,transcript_engine').order('status',{ascending:false}).order('created_at',{ascending:false}).limit(150);
+    var r=await sb.from('essays').select('id,student_id,source,source_note,title,grade,note,status,feedback,created_at,score,score_max,transcript,transcript_status,transcript_engine,purchase_id,pay_code').order('status',{ascending:false}).order('created_at',{ascending:false}).limit(150);
     var rows=r.data||[];
+    var pids=rows.map(function(e){return e.purchase_id}).filter(Boolean),PM={};
+    if(pids.length){var pq=await sb.from('essay_purchases').select('id,plan_name,level,status,credits_used,credits_total').in('id',pids);(pq.data||[]).forEach(function(x){PM[x.id]=x})}
     var h='<div class="upanel" id="tPanel" style="margin-bottom:18px"><div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap"><div><h3>老師自行上傳作文</h3><p class="lead" style="margin-bottom:0">手邊額外需要批閱的作文,可以直接上傳,和學生送來的作文一起排進待批改。</p></div><button type="button" class="btn btn-line sm" id="tToggle" aria-expanded="'+tf.open+'">'+(tf.open?'收合':'＋ 上傳作文')+'</button></div>';
     if(tf.open){
       h+='<form id="tForm" novalidate style="margin-top:16px"><div class="row2"><label class="fld" for="tWho">學生或來源備註(選填)<input id="tWho" placeholder="例如:王同學、班級作業" maxlength="40" value="'+esc(tf.who)+'"></label><label class="fld" for="tGrade">年級<select id="tGrade">'+['國一','國二','國三','高一','高二','高三','其他'].map(function(g){return '<option'+(g===tf.grade?' selected':'')+'>'+g+'</option>'}).join('')+'</select></label></div>'+
@@ -1729,7 +1830,7 @@ function initAdmin(){
     }
     h+='</div><div class="twrap"><table class="tbl"><thead><tr><th>學生</th><th>題目</th><th>年級</th><th>來源</th><th>日期</th><th>狀態</th><th></th></tr></thead><tbody>'+
       rows.map(function(e){var teacher=e.source==='teacher';
-        return '<tr><td>'+esc(teacher?(e.source_note||'(老師自行上傳)'):nm(e.student_id))+'</td><td>'+esc(e.title)+'</td><td>'+esc(e.grade||'')+'</td><td><span class="pill'+(teacher?' ok':'')+'">'+(teacher?'老師上傳':'學生上傳')+'</span></td><td>'+dateShort(e.created_at)+'</td><td><span class="pill '+(e.status==='pending'?'warn':'ok')+'">'+STATUS_ES[e.status]+'</span>'+(scoreTx(e)?' <small>'+esc(scoreTx(e))+'</small>':'')+'</td><td><button type="button" class="btn btn-line sm" data-gr="'+e.id+'">'+(e.status==='pending'?'批改':'查看')+'</button></td></tr>'}).join('')+(rows.length?'':'<tr><td colspan="7" class="none">還沒有作文</td></tr>')+'</tbody></table></div>';
+        return '<tr><td>'+esc(teacher?(e.source_note||'(老師自行上傳)'):nm(e.student_id))+'</td><td>'+esc(e.title)+'</td><td>'+esc(e.grade||'')+'</td><td><span class="pill'+(teacher?' ok':'')+'">'+(teacher?'老師上傳':'學生上傳')+'</span>'+(function(){var pm=PM[e.purchase_id];return pm?'<div class="pinfo"><small>'+esc(lvLabel(pm.level))+'・'+esc(pm.plan_name)+'<br>後五碼/優惠碼:<b>'+esc(e.pay_code||'')+'</b></small> '+(pm.status==='confirmed'?'<span class="pill ok">已收款</span>':pm.status==='cancelled'?'<span class="pill">已取消</span>':'<span class="pill warn">未核對</span> <button type="button" class="btn btn-line sm" data-cfmp="'+esc(pm.id)+'">確認收款</button>')+'</div>':''})()+'</td><td>'+dateShort(e.created_at)+'</td><td><span class="pill '+(e.status==='pending'?'warn':'ok')+'">'+STATUS_ES[e.status]+'</span>'+(scoreTx(e)?' <small>'+esc(scoreTx(e))+'</small>':'')+'</td><td><button type="button" class="btn btn-line sm" data-gr="'+e.id+'">'+(e.status==='pending'?'批改':'查看')+'</button></td></tr>'}).join('')+(rows.length?'':'<tr><td colspan="7" class="none">還沒有作文</td></tr>')+'</tbody></table></div>';
     body.innerHTML=h;
     var tt=$('#tToggle');tt.addEventListener('click',function(){tf.open=!tf.open;render()});
     var tForm=$('#tForm');
@@ -1757,6 +1858,11 @@ function initAdmin(){
         }catch(ex){er.textContent='上傳失敗:'+niceErr(ex);go.disabled=false;go.textContent='加入待批改'}
       });
     }
+    $$('[data-cfmp]',body).forEach(function(b){b.addEventListener('click',async function(){
+      b.disabled=true;var u=await sb.from('essay_purchases').update({status:'confirmed',confirmed_at:new Date().toISOString()}).eq('id',b.getAttribute('data-cfmp'));
+      if(u.error){toast('更新失敗:'+niceErr(u.error));b.disabled=false;return}
+      toast('已確認收款');TABS.e(body);
+    })});
     $$('[data-gr]',body).forEach(function(b){b.addEventListener('click',function(){openGrade(b.getAttribute('data-gr'),rows)})});
   };
   async function openGrade(id,rows){
@@ -2334,17 +2440,62 @@ function initAdmin(){
     })});
   };
 
+  /* --- 作文方案:購買紀錄核對、剩餘次數、方案價格 --- */
+  TABS.pp=async function(body){
+    await loadNames();
+    var pr=await sb.from('essay_purchases').select('id,user_id,plan_id,level,plan_name,amount,credits_total,credits_used,pay_code,status,created_at').order('created_at',{ascending:false}).limit(300);
+    var pl=await sb.from('essay_plans').select('id,level,kind,name,price,list_price,credits,sort,active').order('sort');
+    var rows=pr.data||[],plans=pl.data||[];
+    function rank(x){if(x.status==='cancelled')return 3;if(x.status==='confirmed')return 2;return (x.pay_code||x.credits_used)?0:1}
+    rows=rows.slice().sort(function(a,b){return rank(a)-rank(b)||(a.created_at<b.created_at?1:-1)});
+    var pend=rows.filter(function(x){return rank(x)===0}).length;
+    function who(id){var n=names[id];return n?esc(n.name||'')+(n.email?'<br><small>'+esc(n.email)+'</small>':''):'(未知)'}
+    function st(x){return x.status==='confirmed'?'<span class="pill ok">已確認收款</span>':x.status==='cancelled'?'<span class="pill">已取消</span>':(x.pay_code||x.credits_used)?'<span class="pill warn">待核對</span>':'<span class="pill">尚未回報匯款</span>'}
+    var h='<h3>作文批改方案</h3><p class="lead" style="font-size:14px">學生選好方案後會出現在這裡。對照匯款的「後五碼」或優惠碼,確認收到款項後按「確認收款」。10 篇方案的剩餘次數也在這裡看,上傳作文時系統會自動扣除。</p>'+
+      '<div class="twrap"><table class="tbl"><thead><tr><th>學生</th><th>方案</th><th>金額</th><th>後五碼/優惠碼</th><th>剩餘次數</th><th>狀態</th><th>日期</th><th></th></tr></thead><tbody>'+
+      (rows.map(function(x){
+        return '<tr data-pp="'+esc(x.id)+'"><td>'+who(x.user_id)+'</td><td>'+esc(lvLabel(x.level))+'<br><small>'+esc(x.plan_name)+'</small></td><td>NT$'+(+x.amount).toLocaleString('en-US')+'</td><td><b>'+esc(x.pay_code||'—')+'</b></td>'+
+          '<td><span class="ppleft">'+(x.credits_total-x.credits_used)+' / '+x.credits_total+'</span> <button type="button" class="btn btn-line sm" data-padj="-1" aria-label="減少一次">−</button> <button type="button" class="btn btn-line sm" data-padj="1" aria-label="增加一次">＋</button></td>'+
+          '<td>'+st(x)+'</td><td>'+dateShort(x.created_at)+'</td><td class="pact2">'+
+          (x.status==='pending'?'<button type="button" class="btn btn-fill sm" data-pst="confirmed">確認收款</button> <button type="button" class="btn btn-line sm" data-pst="cancelled">取消</button>':x.status==='confirmed'?'<button type="button" class="btn btn-line sm" data-pst="cancelled">取消</button>':'<button type="button" class="btn btn-line sm" data-pst="pending">恢復</button>')+'</td></tr>'}).join('')||'<tr><td colspan="8" class="none">還沒有人購買方案</td></tr>')+'</tbody></table></div>'+
+      '<p class="mfoot">「取消」後學生就不能再用這個方案上傳。「−」「＋」是調整剩餘次數(例如學生上傳錯了,補還一次)。'+(pend?'目前有 '+pend+' 筆待核對。':'')+'</p>'+
+      '<h3 style="margin-top:26px">方案與價格</h3><div class="twrap"><table class="tbl"><thead><tr><th>階段</th><th>方案</th><th>價格 NT$</th><th>原價 NT$(選填)</th><th>次數</th><th>開放</th><th></th></tr></thead><tbody>'+
+      plans.map(function(p){return '<tr data-plr="'+esc(p.id)+'"><td>'+esc(lvLabel(p.level))+'</td><td>'+esc(p.name)+'</td><td><input type="number" min="0" step="10" data-f="price" value="'+p.price+'" style="width:96px"></td><td><input type="number" min="0" step="10" data-f="list" value="'+(p.list_price==null?'':p.list_price)+'" style="width:96px"></td><td>'+p.credits+'</td><td><input type="checkbox" data-f="active"'+(p.active?' checked':'')+' aria-label="開放"></td><td><button type="button" class="btn btn-line sm" data-plsave="'+esc(p.id)+'">儲存</button></td></tr>'}).join('')+'</tbody></table></div>'+
+      '<p class="mfoot">價格改了只影響之後新選的方案;已經建立的購買紀錄金額不變。方案頁上的圖片是固定的,改價後請記得更新圖片。匯款帳戶資訊在「設定」分頁填寫。</p>';
+    body.innerHTML=h;
+    $$('[data-pst]',body).forEach(function(b){b.addEventListener('click',async function(){
+      var id=b.closest('[data-pp]').getAttribute('data-pp'),s2=b.getAttribute('data-pst'),patch={status:s2,confirmed_at:s2==='confirmed'?new Date().toISOString():null};
+      if(s2==='cancelled'&&!window.confirm('取消後學生就不能再用這個方案上傳,確定嗎?'))return;
+      b.disabled=true;var u=await sb.from('essay_purchases').update(patch).eq('id',id);
+      if(u.error){toast('更新失敗:'+niceErr(u.error));b.disabled=false;return}
+      toast(s2==='confirmed'?'已確認收款':s2==='cancelled'?'已取消':'已恢復為待核對');TABS.pp(body);
+    })});
+    $$('[data-padj]',body).forEach(function(b){b.addEventListener('click',async function(){
+      var tr=b.closest('[data-pp]'),id=tr.getAttribute('data-pp'),x=rows.filter(function(r){return r.id===id})[0],d=+b.getAttribute('data-padj');
+      var used=x.credits_used-d;if(used<0||used>x.credits_total){toast(d>0?'剩餘次數不能超過方案總次數':'剩餘次數已經是 0');return}
+      b.disabled=true;var u=await sb.from('essay_purchases').update({credits_used:used}).eq('id',id);
+      if(u.error){toast('更新失敗:'+niceErr(u.error));b.disabled=false;return}
+      TABS.pp(body);
+    })});
+    $$('[data-plsave]',body).forEach(function(b){b.addEventListener('click',async function(){
+      var tr=b.closest('[data-plr]'),price=parseInt($('[data-f=price]',tr).value,10),lraw=$('[data-f=list]',tr).value.trim(),lp=lraw===''?null:parseInt(lraw,10);
+      if(!(price>=0)||(lp!==null&&!(lp>=0))){toast('請輸入正確的金額');return}
+      var u=await sb.from('essay_plans').update({price:price,list_price:lp,active:$('[data-f=active]',tr).checked}).eq('id',b.getAttribute('data-plsave'));
+      toast(u.error?'儲存失敗:'+niceErr(u.error):'已儲存方案');
+    })});
+  };
+
   TABS.s=async function(body){
     var pr=await sb.from('plans').select('id,name,amount,period_type,frequency,exec_times,active,sort').order('sort');
     var sr=await sb.from('site_settings').select('key,value');
     var st={};(sr.data||[]).forEach(function(x){st[x.key]=x.value});
     body.innerHTML='<h3>付費會員方案</h3><div class="twrap"><table class="tbl"><thead><tr><th>方案</th><th>金額(NT$)</th><th>扣款週期</th><th>開放</th><th></th></tr></thead><tbody>'+(pr.data||[]).map(function(p){
       return '<tr data-plan="'+esc(p.id)+'"><td>'+esc(p.name)+'</td><td><input type="number" min="1" step="10" data-f="amount" value="'+p.amount+'" style="width:100px"></td><td>每 '+p.frequency+' '+(p.period_type==='Y'?'年':p.period_type==='M'?'個月':'天')+',最多 '+p.exec_times+' 期</td><td><input type="checkbox" data-f="active"'+(p.active?' checked':'')+' aria-label="開放"></td><td><button type="button" class="btn btn-line sm" data-psave="'+esc(p.id)+'">儲存</button></td></tr>'}).join('')+'</tbody></table></div><p class="mfoot">已經在扣款的訂閱者,金額不會跟著改(綠界以下單當時的金額為準)。價格確認後把「開放」打勾,網站才會顯示並開放加入。</p>'+
-      '<h3 style="margin-top:22px">網站設定</h3><form id="sForm" class="fm" style="max-width:520px"><label class="fld" style="flex-direction:row;gap:10px;align-items:center"><input type="checkbox" id="sPay"'+(st.payments_enabled===true?' checked':'')+'> 開放線上付款(教材、付費會員、付費課程)</label><label class="fld" for="sLine">LINE 官方帳號連結<input id="sLine" value="'+esc(st.line_url||'')+'" placeholder="https://lin.ee/…"></label><label class="fld" for="sYt">YouTube 頻道網址(公開直播)<input id="sYt" value="'+esc(st.youtube_url||'')+'" placeholder="https://www.youtube.com/@…"></label><div class="err" id="sErr" role="alert"></div><button class="btn btn-fill" type="submit" style="align-self:flex-start">儲存</button></form>';
+      '<h3 style="margin-top:22px">網站設定</h3><form id="sForm" class="fm" style="max-width:520px"><label class="fld" style="flex-direction:row;gap:10px;align-items:center"><input type="checkbox" id="sPay"'+(st.payments_enabled===true?' checked':'')+'> 開放線上付款(教材、付費會員、付費課程)</label><label class="fld" for="sLine">LINE 官方帳號連結<input id="sLine" value="'+esc(st.line_url||'')+'" placeholder="https://lin.ee/…"></label><label class="fld" for="sYt">YouTube 頻道網址(公開直播)<input id="sYt" value="'+esc(st.youtube_url||'')+'" placeholder="https://www.youtube.com/@…"></label><label class="fld" for="sBank">作文批改匯款資訊(顯示在付款說明頁)<textarea id="sBank" rows="5" maxlength="500" placeholder="銀行:○○銀行(代碼 000)&#10;帳號:0000-000-000000&#10;戶名:○○○">'+esc(typeof st.bank_info==='string'?st.bank_info:'')+'</textarea></label><div class="err" id="sErr" role="alert"></div><button class="btn btn-fill" type="submit" style="align-self:flex-start">儲存</button></form>';
     body.insertAdjacentHTML('beforeend','<h3 style="margin-top:26px">資料備份</h3><div class="bkbox"><p class="mfoot" style="margin:0 0 10px">把網站所有資料表(會員、作文與評語、訂單、課程、直播…)匯出成一個檔案存到你的電腦。建議每月備份一次,出大改動前也先備份。檔案內有學生個資,請存放在安全的地方,不要上傳到公開處。作文與封面的圖片檔本身不在其中,檔案內只有它們的路徑。</p><button type="button" class="btn btn-line" id="bkGo">下載資料備份</button> <span class="mfoot" id="bkMsg" role="status"></span></div>');
     $('#bkGo').addEventListener('click',async function(){
       var bt=this,msg=$('#bkMsg');bt.disabled=true;msg.textContent='備份中…';
-      var TB=['profiles','admin_emails','site_settings','plans','memberships','products','courses','course_chapters','chapter_videos','enrollments','progress','orders','order_items','payments','product_categories','essays','essay_files','feedback_templates','resources','resource_claims','live_events','live_links','live_views','announcements','contact_messages','ocr_usage'];
+      var TB=['profiles','admin_emails','site_settings','plans','memberships','products','courses','course_chapters','chapter_videos','enrollments','progress','orders','order_items','payments','product_categories','essays','essay_files','essay_plans','essay_purchases','feedback_templates','resources','resource_claims','live_events','live_links','live_views','announcements','contact_messages','ocr_usage'];
       var out={exported_at:new Date().toISOString(),site:location.host,tables:{},errors:{}},total=0;
       try{
         for(var i=0;i<TB.length;i++){
@@ -2376,7 +2527,7 @@ function initAdmin(){
       e.preventDefault();var er2=$('#sErr'),a=$('#sLine').value.trim(),b2=$('#sYt').value.trim();
       function ok(u){if(!u)return true;try{return /^https?:$/.test(new URL(u).protocol)}catch(x){return false}}
       if(!ok(a)||!ok(b2)){er2.textContent='請貼上完整網址(https://…),或留空。';return}
-      var r2=await sb.from('site_settings').upsert([{key:'payments_enabled',value:$('#sPay').checked,updated_at:new Date().toISOString()},{key:'line_url',value:a,updated_at:new Date().toISOString()},{key:'youtube_url',value:b2,updated_at:new Date().toISOString()}],{onConflict:'key'});
+      var r2=await sb.from('site_settings').upsert([{key:'payments_enabled',value:$('#sPay').checked,updated_at:new Date().toISOString()},{key:'line_url',value:a,updated_at:new Date().toISOString()},{key:'youtube_url',value:b2,updated_at:new Date().toISOString()},{key:'bank_info',value:$('#sBank').value.trim(),updated_at:new Date().toISOString()}],{onConflict:'key'});
       if(r2.error){er2.textContent='儲存失敗:'+niceErr(r2.error);return}
       er2.textContent='';toast('已儲存');
     });

@@ -23,7 +23,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@400;600;700;900&family=LXGW+WenKai+TC:wght@400;700&display=swap">
-<link rel="stylesheet" href="styles.css?v=20261025c">
+<link rel="stylesheet" href="styles.css?v=20261026d">
 </head>
 <body data-page="essay">
 <a class="skip" href="#main">跳到主要內容</a>
@@ -104,17 +104,19 @@
   <div class="wrap phero-in">
     <nav class="crumb" aria-label="導覽路徑"><a href="index.html">首頁</a><i>/</i><span aria-current="page">作文批改</span></nav>
     <h1>作文批改</h1>
-    <p>寫在稿紙上,拍照上傳即可,不需要另外繕打。老師逐篇批改,評語在會員專區查看。</p>
+    <p>先選學習階段與批改方案,匯款後把手寫作文拍照上傳。老師逐篇批改,評語在會員專區查看。</p>
   </div>
 </section>
 <div class="pg"><div class="wrap">
-  <div class="essay" style="margin-top:6px">
-    <div><div class="steps" style="margin-top:0"><div class="step"><div class="no">壹</div><h3 aria-level="2">登入並拍照上傳</h3><p>使用 Google 帳號登入,把手寫作文逐頁拍清楚後上傳。</p></div><div class="step"><div class="no">貳</div><h3 aria-level="2">老師批改</h3><p>老師依學測國寫評分角度,逐篇給予修改與評語。</p></div><div class="step"><div class="no">參</div><h3 aria-level="2">查看批改結果</h3><p>批改完成後,在會員專區查看評語與建議。</p></div></div>
+  <div id="ewiz" style="margin-top:6px"></div>
+  <div class="essay" id="eUp" style="margin-top:6px" hidden>
+    <div><div class="steps" style="margin-top:0"><div class="step"><div class="no">壹</div><h3 aria-level="2">選方案並匯款</h3><p>先選國小、國中或高中的批改方案,依說明匯款。</p></div><div class="step"><div class="no">貳</div><h3 aria-level="2">填後五碼並上傳</h3><p>填寫轉帳帳號後五碼(或優惠碼),把手寫作文逐頁拍清楚後上傳。</p></div><div class="step"><div class="no">參</div><h3 aria-level="2">老師批改</h3><p>老師核對收款後逐篇批改,評語在會員專區查看。</p></div></div>
       <div class="twocol" style="grid-template-columns:1fr;margin-top:16px"><div class="box"><h3 aria-level="2">拍照小提醒</h3><ul class="ticks"><li>光線充足,避免反光與陰影</li><li>整頁入鏡,四邊都拍到</li><li>依頁碼順序上傳</li><li>每次最多 6 張,每張 10 MB 以內</li></ul></div></div>
     </div>
-    <div><div class="upanel" id="uPanel"></div><div class="panel" style="margin-top:16px"><h2>我的上傳紀錄</h2><ul class="mlist" id="myEssays"></ul></div></div>
+    <div><div class="upanel" id="uPanel"></div></div>
   </div>
-  <div class="section"><div class="sec-head"><div><h2>作文批改常見問題</h2></div></div><div class="faq"><details><summary>作文怎麼送批改?</summary><p>登入會員後,到「作文批改」頁填寫題目與年級,把手寫稿紙逐頁拍照上傳。批改完成後,可在會員專區查看老師的評語與建議。</p></details><details><summary>作文照片要怎麼拍?</summary><p>光線充足、整頁入鏡、避免反光與陰影,並依頁碼順序上傳。每次最多 6 張,每張 10 MB 以內。</p></details></div></div>
+  <div class="panel" style="margin-top:16px"><h2>我的上傳紀錄</h2><ul class="mlist" id="myEssays"></ul></div>
+  <div class="section"><div class="sec-head"><div><h2>作文批改常見問題</h2></div></div><div class="faq"><details><summary>作文怎麼送批改?</summary><p>進入「作文批改」頁,先選擇國小、國中或高中,再選批改方案並依說明匯款。匯款後登入,填寫轉帳帳號後五碼(或優惠碼),把手寫稿紙逐頁拍照上傳。老師核對收款並批改後,可在會員專區查看評語與建議。</p></details><details><summary>10 篇方案怎麼使用?</summary><p>購買 10 篇(或 10 次)方案只需要付款一次。之後每次上傳作文,系統會自動扣除一次,剩餘次數會顯示在「作文批改」頁的「我已購買的方案」,不用重新付款。</p></details><details><summary>作文照片要怎麼拍?</summary><p>光線充足、整頁入鏡、避免反光與陰影,並依頁碼順序上傳。每次最多 6 張,每張 10 MB 以內。</p></details></div></div>
 </div></div>
 
 </main>
@@ -148,8 +150,8 @@
 </div></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="vendor/supabase.js"></script>
-<script src="config.js?v=20261025c"></script>
+<script src="config.js?v=20261026d"></script>
 <script src="data.js"></script>
-<script src="app.js?v=20261025c"></script>
+<script src="app.js?v=20261026d"></script>
 </body>
 </html>
