@@ -1290,3 +1290,21 @@ dialog.lbx::backdrop{background:rgba(0,0,0,.6)}
 .lbx-prev{left:max(8px,env(safe-area-inset-left,0px))}
 .lbx-next{right:max(8px,env(safe-area-inset-right,0px))}
 dialog.lbx.single .lbx-n{display:none}
+
+/* 後台自訂下拉清單:選取=紅底白字,滑鼠移到=淺紅底深字 */
+ul.csel{position:fixed;z-index:2147483000;margin:0;padding:4px;list-style:none;overflow:auto;background:var(--card);color:var(--text);border:1px solid color-mix(in srgb,var(--text) 22%,transparent);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.22);font:inherit;font-size:15px}
+ul.csel li{padding:8px 12px;border-radius:7px;cursor:pointer;white-space:nowrap;min-height:1.2em}
+ul.csel li.hi{background:color-mix(in srgb,#B03A2E 16%,var(--card));color:var(--text)}
+ul.csel li.on{background:#B03A2E;color:#fff;font-weight:700}
+ul.csel li.dis{opacity:.45;cursor:default}
+
+/* 後台課程:收合/展開、搭配教材勾選 */
+.ccfg .cctog{margin-left:auto}
+.ccfg .ccbody[hidden]{display:none}
+.ccfg:not(.open) .ccfg-h{margin-bottom:0}
+.cmats{margin:12px 0}
+.cmats small{color:color-mix(in srgb,var(--text) 62%,transparent)}
+.cmats [data-cmats]{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:8px}
+.cmat{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:14px}
+.cmat input{accent-color:var(--bronze-b)}
+.pdel.arm{background:#B03A2E;color:#fff;border-color:#B03A2E}
