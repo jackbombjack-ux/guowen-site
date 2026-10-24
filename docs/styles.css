@@ -1250,3 +1250,25 @@ html.ld:not(.ld-out) .hero *,html.ld:not(.ld-out) .hero::before,html.ld:not(.ld-
   .hcar .car-arrow.l{left:-6px}.hcar .car-arrow.r{right:-6px}
 }
 @media (hover:none){.hcar .car-arrow{display:none}}
+
+/* ===== 2026-10 視覺微調(jack 意見) ===== */
+/* 首頁小標語:加深、加粗,與水墨背景拉開對比 */
+.hero .hero-tag{color:#4a3106;font-weight:800;text-shadow:0 0 16px rgba(248,245,238,1),0 0 7px rgba(248,245,238,1),0 1px 0 rgba(255,255,255,.7)}
+:root[data-theme="dark"] .hero .hero-tag{color:#F6E0A6;text-shadow:0 1px 10px rgba(0,0,0,.7)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .hero .hero-tag{color:#F6E0A6;text-shadow:0 1px 10px rgba(0,0,0,.7)}}
+/* 大標語第二行向右縮排,與第一行錯落 */
+.hero h1 .ln+.ln{padding-left:1.15em}
+@media (max-width:560px){.hero h1 .ln+.ln{padding-left:.6em}}
+/* 各頁頂部副標與麵包屑:字色加深、加淡光暈,背景山水不再干擾閱讀 */
+.phero .art::after{background:linear-gradient(90deg,var(--paper) 14%,color-mix(in srgb,var(--paper) 62%,transparent) 50%,transparent 88%);opacity:.95}
+.phero p{color:var(--text);font-weight:500;text-shadow:0 0 12px var(--paper),0 0 5px var(--paper),0 0 2px var(--paper)}
+.phero .crumb{color:var(--text);text-shadow:0 0 10px var(--paper),0 0 4px var(--paper)}
+/* 課程卡片:水墨底圖要鋪滿整個封面區(原本被 .c-art img 的 contain 樣式縮成一條) */
+.c-art img.sc{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:auto;object-fit:cover;object-position:50% 72%;border-radius:0;box-shadow:none;z-index:0}
+.c-art .phold{position:relative;z-index:1;background:none}
+/* 後台下拉選單:目前選取的項目用紅色標示 */
+select option{background:var(--card);color:var(--text)}
+select option:checked{background:#B03A2E linear-gradient(#B03A2E,#B03A2E);color:#fff;font-weight:700}
+select option:hover{background:#B03A2E linear-gradient(#B03A2E,#B03A2E);color:#fff}
+.tbl select,.fld select{font-weight:600}
+.ccedit img[data-ccov]{display:block;max-width:180px;max-height:150px;width:auto;height:auto;border-radius:6px;margin:6px 0;box-shadow:0 4px 12px rgba(0,0,0,.2)}
