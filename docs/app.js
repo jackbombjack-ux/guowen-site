@@ -315,6 +315,44 @@ $$('dialog').forEach(function(d){
   d.addEventListener('click',function(e){if(e.target===d)closeDlg(d)});
   $$('[data-close]',d).forEach(function(b){b.addEventListener('click',function(){closeDlg(d)})});
 });
+/* ---------- 作文照片放大檢視(縮圖、批改照片都可點開) ---------- */
+(function(){
+  var lb=null,imgs=[],idx=0,zoom=1,box,im,cap,zb;
+  var LEVELS=[1,2,3.5];
+  function build(){
+    lb=document.createElement('dialog');lb.className='lbx';lb.setAttribute('aria-label','照片放大檢視');
+    lb.innerHTML='<div class="lbx-bar"><span class="lbx-cap" aria-live="polite"></span><button type="button" class="lbx-z" aria-label="放大">放大 ＋</button><button type="button" class="lbx-x" aria-label="關閉">×</button></div><div class="lbx-stage"><img alt=""></div><button type="button" class="lbx-n lbx-prev" aria-label="上一張">‹</button><button type="button" class="lbx-n lbx-next" aria-label="下一張">›</button>';
+    document.body.appendChild(lb);
+    box=lb.querySelector('.lbx-stage');im=box.querySelector('img');cap=lb.querySelector('.lbx-cap');zb=lb.querySelector('.lbx-z');
+    lb.querySelector('.lbx-x').addEventListener('click',close);
+    lb.querySelector('.lbx-prev').addEventListener('click',function(){go(-1)});
+    lb.querySelector('.lbx-next').addEventListener('click',function(){go(1)});
+    zb.addEventListener('click',function(){setZoom(LEVELS[(LEVELS.indexOf(zoom)+1)%LEVELS.length])});
+    im.addEventListener('click',function(){setZoom(zoom===1?2:1)});
+    lb.addEventListener('click',function(e){if(e.target===lb||e.target===box)close()});
+    lb.addEventListener('keydown',function(e){if(e.key==='ArrowLeft'){go(-1);e.preventDefault()}else if(e.key==='ArrowRight'){go(1);e.preventDefault()}else if(e.key==='+'||e.key==='='){setZoom(Math.min(3.5,zoom===1?2:3.5))}else if(e.key==='-'){setZoom(1)}});
+    lb.addEventListener('close',function(){im.removeAttribute('src')});
+  }
+  function setZoom(z){zoom=z;im.style.width=(z*100)+'%';im.style.maxWidth=z===1?'100%':'none';im.style.maxHeight=z===1?'100%':'none';im.style.height=z===1?'100%':'auto';im.style.objectFit='contain';im.style.cursor=z===1?'zoom-in':'zoom-out';zb.textContent=z===1?'放大 ＋':(z>=3.5?'還原 －':'再放大 ＋');box.scrollTop=0;box.scrollLeft=0}
+  function show(){
+    var it=imgs[idx];im.src=it.src;im.alt=it.alt||'';
+    cap.textContent=(it.alt||'照片')+(imgs.length>1?'(第 '+(idx+1)+' / '+imgs.length+' 張)':'');
+    lb.classList.toggle('single',imgs.length<2);setZoom(1);
+  }
+  function go(d){if(imgs.length<2)return;idx=(idx+d+imgs.length)%imgs.length;show()}
+  function close(){closeDlg(lb)}
+  function open(list,i){if(!lb)build();imgs=list;idx=i;show();showDlg(lb);try{lb.querySelector('.lbx-x').focus()}catch(_){}}
+  document.addEventListener('click',function(e){
+    var t=e.target;if(!t||t.tagName!=='IMG')return;
+    var sc=t.closest('.thumbs,.gimgs,.fbk,.col');if(!sc)return;
+    if(t.closest('.lbx'))return;
+    e.preventDefault();
+    var list=[].slice.call(sc.querySelectorAll('img')).filter(function(x){return x.getAttribute('src')});
+    var i=list.indexOf(t);if(i<0){list=[t];i=0}
+    open(list.map(function(x){return {src:x.getAttribute('src'),alt:x.getAttribute('alt')}}),i);
+  },true);
+})();
+
 var modal=$('#modal'),mBody=$('#mBody');
 function openModal(html,mount){mBody.innerHTML=html;if(mount)mount(mBody);showDlg(modal)}
 function ext(key){if(CONFIG[key]){window.open(CONFIG[key],'_blank','noopener')}else{toast('此連結將於正式上線前設定')}}
@@ -1279,12 +1317,14 @@ function initEssay(){
      '<form id="upForm" novalidate><div class="row2"><label class="fld" for="upTitle">作文題目<input id="upTitle" placeholder="例如:溫暖的心" maxlength="60"></label><label class="fld" for="upGrade">年級<select id="upGrade"><option>國一</option><option>國二</option><option>國三</option><option>高一</option><option>高二</option><option selected>高三</option><option>其他</option></select></label></div>'+
      '<label class="drop" id="drop" for="upFile">'+ico('i-upload')+'<span><b>點選選擇照片</b>,或把照片拖曳到這裡</span><span style="font-size:12.5px">最多 '+MAXF+' 張・每張 '+MAXMB+' MB 以內・JPG / PNG / WebP</span><input id="upFile" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>'+
      '<div class="thumbs" id="thumbs"></div>'+
+     '<p class="chk" id="chkTip" hidden>送出前請<b>點一下縮圖放大</b>,確認每一頁字跡清楚、整頁完整沒有被裁掉,再按「送出批改」,以免照片模糊或不完整影響批閱。</p>'+
      '<div class="tips"><span>光線充足</span><span>整頁入鏡</span><span>避免反光與陰影</span><span>依頁碼順序上傳</span></div>'+
      '<label class="fld" for="upNote" style="margin-top:8px">給老師的話(選填)<textarea id="upNote" maxlength="500" placeholder="例如:想加強結尾的收束"></textarea></label>'+
      '<div class="err" id="upErr" role="alert"></div><button class="btn btn-fill" type="submit" id="upGo">送出批改</button></form>';
     var inp=$('#upFile'),drop=$('#drop');
     function drawThumbs(){
       $('#thumbs').innerHTML=upUrls.map(function(u,i){return '<div class="th"><img src="'+u+'" alt="作文第 '+(i+1)+' 頁"><button type="button" data-rmf="'+i+'" aria-label="移除第 '+(i+1)+' 張">×</button></div>'}).join('');
+      var ct=$('#chkTip');if(ct)ct.hidden=!upUrls.length;
       $$('[data-rmf]',p).forEach(function(b){b.addEventListener('click',function(){var i=+b.getAttribute('data-rmf');URL.revokeObjectURL(upUrls[i]);upUrls.splice(i,1);upFiles.splice(i,1);drawThumbs()})});
     }
     function addFiles(list){

@@ -1272,3 +1272,21 @@ select option:checked{background:#B03A2E linear-gradient(#B03A2E,#B03A2E);color:
 select option:hover{background:#B03A2E linear-gradient(#B03A2E,#B03A2E);color:#fff}
 .tbl select,.fld select{font-weight:600}
 .ccedit img[data-ccov]{display:block;max-width:180px;max-height:150px;width:auto;height:auto;border-radius:6px;margin:6px 0;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+
+/* 作文照片放大檢視 */
+.th img,.fbk img,.gimgs img,.col a>img{cursor:zoom-in}
+.chk{margin:10px 0 2px;padding:9px 12px;border-radius:8px;background:color-mix(in srgb,var(--bronze-text) 10%,var(--paper));border:1px solid color-mix(in srgb,var(--bronze-text) 35%,transparent);font-size:13.5px;line-height:1.7;color:var(--text)}
+.chk b{color:var(--bronze-text)}
+dialog.lbx{width:100vw;height:100vh;height:100dvh;max-width:none;max-height:none;margin:0;padding:0;background:rgba(10,12,18,.94);color:#fff}
+dialog.lbx[open]{display:flex;flex-direction:column}
+dialog.lbx::backdrop{background:rgba(0,0,0,.6)}
+.lbx-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;padding-top:max(10px,env(safe-area-inset-top,0px))}
+.lbx-cap{flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e9e6dc}
+.lbx-z,.lbx-x{min-height:40px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:14px;padding:0 16px;border:1px solid rgba(255,255,255,.25)}
+.lbx-x{width:40px;padding:0;font-size:22px;line-height:1}
+.lbx-stage{flex:1;min-height:0;overflow:auto;display:flex;align-items:flex-start;justify-content:flex-start;padding:6px;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y pinch-zoom}
+.lbx-stage img{display:block;margin:auto;width:100%;height:100%;object-fit:contain;flex:none}
+.lbx-n{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:64px;border-radius:10px;background:rgba(255,255,255,.16);color:#fff;font-size:30px;line-height:1;border:1px solid rgba(255,255,255,.22)}
+.lbx-prev{left:max(8px,env(safe-area-inset-left,0px))}
+.lbx-next{right:max(8px,env(safe-area-inset-right,0px))}
+dialog.lbx.single .lbx-n{display:none}
