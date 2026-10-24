@@ -1354,3 +1354,11 @@ ul.csel li.dis{opacity:.45;cursor:default}
 .ppleft{display:inline-block;min-width:3.2em;font-weight:700}
 @media (max-width:760px){.elv{grid-template-columns:1fr}.epay{grid-template-columns:1fr}.ewz{padding:20px 16px}.elv-c{flex-direction:row;justify-content:space-between;padding:18px 16px;text-align:left}}
 .essay[hidden]{display:none}
+
+.lvtabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.lvtabs button{padding:8px 16px;border-radius:999px;font-size:14.5px;letter-spacing:.06em;color:var(--text-soft);background:var(--card);border:1px solid var(--line);display:inline-flex;gap:6px;align-items:center}
+.lvtabs button[aria-selected="true"]{color:var(--text);border-color:var(--gold,#b08a3e);box-shadow:var(--shadow-sm);font-weight:600}
+.lvn{color:#b03a2e;font-weight:700;font-size:14px}
+button.payb{cursor:pointer;border:0;font:inherit;font-size:12.5px}
+button.payb:hover{filter:brightness(.95);text-decoration:underline}
+.muted{color:var(--text-soft)}

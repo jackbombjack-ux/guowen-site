@@ -1779,7 +1779,7 @@ function initMember(){
 function parseYt(v){return ytId(v)}
 function initAdmin(){
   var app=$('#adminApp');if(!app)return;
-  var aTab='e',tf={who:'',title:'',grade:'國三',open:false},tFiles=[],tUrls=[],names={};
+  var aTab='e',aLv='all',tf={who:'',title:'',grade:'國三',open:false},tFiles=[],tUrls=[],names={};
   function clearT(){tUrls.forEach(function(u){URL.revokeObjectURL(u)});tUrls=[];tFiles=[]}
   function lvLabel(l){return ELV[l]?ELV[l].name:''}
   function nm(id){return id&&names[id]?names[id].name||names[id].email:'(未知)'}
@@ -1822,15 +1822,22 @@ function initAdmin(){
     if(pids.length){var pq=await sb.from('essay_purchases').select('id,plan_name,level,status,credits_used,credits_total').in('id',pids);(pq.data||[]).forEach(function(x){PM[x.id]=x})}
     var h='<div class="upanel" id="tPanel" style="margin-bottom:18px"><div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap"><div><h3>老師自行上傳作文</h3><p class="lead" style="margin-bottom:0">手邊額外需要批閱的作文,可以直接上傳,和學生送來的作文一起排進待批改。</p></div><button type="button" class="btn btn-line sm" id="tToggle" aria-expanded="'+tf.open+'">'+(tf.open?'收合':'＋ 上傳作文')+'</button></div>';
     if(tf.open){
-      h+='<form id="tForm" novalidate style="margin-top:16px"><div class="row2"><label class="fld" for="tWho">學生或來源備註(選填)<input id="tWho" placeholder="例如:王同學、班級作業" maxlength="40" value="'+esc(tf.who)+'"></label><label class="fld" for="tGrade">年級<select id="tGrade">'+['國一','國二','國三','高一','高二','高三','其他'].map(function(g){return '<option'+(g===tf.grade?' selected':'')+'>'+g+'</option>'}).join('')+'</select></label></div>'+
+      h+='<form id="tForm" novalidate style="margin-top:16px"><div class="row2"><label class="fld" for="tWho">學生或來源備註(選填)<input id="tWho" placeholder="例如:王同學、班級作業" maxlength="40" value="'+esc(tf.who)+'"></label><label class="fld" for="tGrade">年級<select id="tGrade">'+['國小三','國小四','國小五','國小六','國一','國二','國三','高一','高二','高三','其他'].map(function(g){return '<option'+(g===tf.grade?' selected':'')+'>'+g+'</option>'}).join('')+'</select></label></div>'+
        '<label class="fld" for="tTitle" style="margin-bottom:12px">作文題目<input id="tTitle" placeholder="例如:溫暖的心" maxlength="60" value="'+esc(tf.title)+'"></label>'+
        '<label class="drop" id="tDrop" for="tFile">'+ico('i-upload')+'<span><b>點選選擇照片</b>,或把照片拖曳到這裡</span><span style="font-size:12.5px">最多 '+MAXF+' 張・每張 '+MAXMB+' MB 以內・JPG / PNG / WebP</span><input id="tFile" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>'+
        '<div class="thumbs" id="tThumbs">'+tUrls.map(function(u,i){return '<div class="th"><img src="'+u+'" alt="作文第 '+(i+1)+' 頁"><button type="button" data-trm="'+i+'" aria-label="移除第 '+(i+1)+' 張">×</button></div>'}).join('')+'</div>'+
        '<div class="err" id="tErr" role="alert" style="margin-top:8px"></div><button class="btn btn-fill" type="submit" id="tGo">加入待批改</button></form>';
     }
-    h+='</div><div class="twrap"><table class="tbl"><thead><tr><th>學生</th><th>題目</th><th>年級</th><th>來源</th><th>日期</th><th>狀態</th><th></th></tr></thead><tbody>'+
-      rows.map(function(e){var teacher=e.source==='teacher';
-        return '<tr><td>'+esc(teacher?(e.source_note||'(老師自行上傳)'):nm(e.student_id))+'</td><td>'+esc(e.title)+'</td><td>'+esc(e.grade||'')+'</td><td><span class="pill'+(teacher?' ok':'')+'">'+(teacher?'老師上傳':'學生上傳')+'</span>'+(function(){var pm=PM[e.purchase_id];return pm?'<div class="pinfo"><small>'+esc(lvLabel(pm.level))+'・'+esc(pm.plan_name)+'<br>後五碼/優惠碼:<b>'+esc(e.pay_code||'')+'</b></small> '+(pm.status==='confirmed'?'<span class="pill ok">已收款</span>':pm.status==='cancelled'?'<span class="pill">已取消</span>':'<span class="pill warn">未核對</span> <button type="button" class="btn btn-line sm" data-cfmp="'+esc(pm.id)+'">確認收款</button>')+'</div>':''})()+'</td><td>'+dateShort(e.created_at)+'</td><td><span class="pill '+(e.status==='pending'?'warn':'ok')+'">'+STATUS_ES[e.status]+'</span>'+(scoreTx(e)?' <small>'+esc(scoreTx(e))+'</small>':'')+'</td><td><button type="button" class="btn btn-line sm" data-gr="'+e.id+'">'+(e.status==='pending'?'批改':'查看')+'</button></td></tr>'}).join('')+(rows.length?'':'<tr><td colspan="7" class="none">還沒有作文</td></tr>')+'</tbody></table></div>';
+    function essLv(e){var pm=PM[e.purchase_id];if(pm&&pm.level)return pm.level;var g=e.grade||'';return /^國小/.test(g)?'elem':/^國/.test(g)?'junior':/^高/.test(g)?'senior':''}
+    var LVT=[['all','全部'],['elem','國小'],['junior','國中'],['senior','高中']],cnt={};
+    LVT.forEach(function(t){cnt[t[0]]=rows.filter(function(e){return e.status==='pending'&&(t[0]==='all'||essLv(e)===t[0])}).length});
+    var shown=rows.filter(function(e){return aLv==='all'||essLv(e)===aLv});
+    h+='</div><div class="lvtabs" role="tablist" aria-label="學習階段">'+LVT.map(function(t){return '<button type="button" role="tab" data-lv="'+t[0]+'" aria-selected="'+(aLv===t[0])+'">'+t[1]+(cnt[t[0]]?'<span class="lvn" title="待批改篇數">'+cnt[t[0]]+'</span>':'')+'</button>'}).join('')+'</div>'+
+      '<div class="twrap"><table class="tbl"><thead><tr><th>學生</th><th>題目</th><th>年級</th><th>類別</th><th>帳號後五碼/優惠碼</th><th>付款確認</th><th>來源</th><th>日期</th><th>狀態</th><th></th></tr></thead><tbody>'+
+      shown.map(function(e){var teacher=e.source==='teacher',pm=PM[e.purchase_id],lv=essLv(e);
+        var cat=pm?esc(lvLabel(pm.level))+'<br><small>'+esc(pm.plan_name)+(pm.credits_total>1?'<br>已使用 '+pm.credits_used+' 篇・<b>剩餘 '+(pm.credits_total-pm.credits_used)+' 篇</b>':'')+'</small>':(lv?esc(lvLabel(lv)):'—');
+        var pay=pm?(pm.status==='confirmed'?'<button type="button" class="pill ok payb" data-ufmp="'+esc(pm.id)+'" title="點一下改回待確認">已確認</button>':pm.status==='cancelled'?'<span class="pill">已取消</span>':'<button type="button" class="pill warn payb" data-cfmp="'+esc(pm.id)+'" title="核對無誤後點一下改成已確認">待確認</button>'):'<span class="muted">—</span>';
+        return '<tr><td>'+esc(teacher?(e.source_note||'(老師自行上傳)'):nm(e.student_id))+'</td><td>'+esc(e.title)+'</td><td>'+esc(e.grade||'')+'</td><td>'+cat+'</td><td><b>'+esc(e.pay_code||'—')+'</b></td><td>'+pay+'</td><td><span class="pill'+(teacher?' ok':'')+'">'+(teacher?'老師上傳':'學生上傳')+'</span></td><td>'+dateShort(e.created_at)+'</td><td><span class="pill '+(e.status==='pending'?'warn':'ok')+'">'+STATUS_ES[e.status]+'</span>'+(scoreTx(e)?' <small>'+esc(scoreTx(e))+'</small>':'')+'</td><td><button type="button" class="btn btn-line sm" data-gr="'+e.id+'">'+(e.status==='pending'?'批改':'查看')+'</button></td></tr>'}).join('')+(shown.length?'':'<tr><td colspan="10" class="none">'+(rows.length?'這個階段還沒有作文':'還沒有作文')+'</td></tr>')+'</tbody></table></div>';
     body.innerHTML=h;
     var tt=$('#tToggle');tt.addEventListener('click',function(){tf.open=!tf.open;render()});
     var tForm=$('#tForm');
@@ -1858,11 +1865,13 @@ function initAdmin(){
         }catch(ex){er.textContent='上傳失敗:'+niceErr(ex);go.disabled=false;go.textContent='加入待批改'}
       });
     }
-    $$('[data-cfmp]',body).forEach(function(b){b.addEventListener('click',async function(){
-      b.disabled=true;var u=await sb.from('essay_purchases').update({status:'confirmed',confirmed_at:new Date().toISOString()}).eq('id',b.getAttribute('data-cfmp'));
+    $$('[data-lv]',body).forEach(function(b){b.addEventListener('click',function(){aLv=b.getAttribute('data-lv');TABS.e(body)})});
+    function setPay(attr,st){$$('['+attr+']',body).forEach(function(b){b.addEventListener('click',async function(){
+      b.disabled=true;var u=await sb.from('essay_purchases').update({status:st,confirmed_at:st==='confirmed'?new Date().toISOString():null}).eq('id',b.getAttribute(attr));
       if(u.error){toast('更新失敗:'+niceErr(u.error));b.disabled=false;return}
-      toast('已確認收款');TABS.e(body);
-    })});
+      toast(st==='confirmed'?'已確認收款':'已改回待確認');TABS.e(body);
+    })})}
+    setPay('data-cfmp','confirmed');setPay('data-ufmp','pending');
     $$('[data-gr]',body).forEach(function(b){b.addEventListener('click',function(){openGrade(b.getAttribute('data-gr'),rows)})});
   };
   async function openGrade(id,rows){
