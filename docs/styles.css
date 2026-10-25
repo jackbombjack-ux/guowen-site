@@ -981,7 +981,7 @@ img.sc.ir{position:absolute;inset:0;width:100%;height:100%}
 .btn-line-green{background:#067A38;color:#fff}
 .btn-line-green:hover{background:#056530}
 /* 教材內容編輯器(後台) */
-.pact2{white-space:nowrap}
+.pact2{white-space:normal}
 .ped{display:grid;gap:14px;padding:14px 2px 18px;text-align:left;white-space:normal}
 .ped-row{display:grid;grid-template-columns:200px minmax(0,1fr);gap:18px;align-items:start}
 .ped-cov{display:grid;gap:8px;justify-items:start}

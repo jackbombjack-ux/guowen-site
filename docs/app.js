@@ -2713,8 +2713,8 @@ function initAdmin(){
         return '<tr data-pp="'+esc(x.id)+'"><td>'+who(x.user_id)+'</td><td>'+esc(lvLabel(x.level))+'<br><small>'+esc(x.plan_name)+'</small></td><td>NT$'+(+x.amount).toLocaleString('en-US')+'</td><td><b>'+esc(x.pay_code||'—')+'</b></td>'+
           '<td><span class="ppleft">'+(x.credits_total-x.credits_used)+' / '+x.credits_total+'</span> <button type="button" class="btn btn-line sm" data-padj="-1" aria-label="減少一次">−</button> <button type="button" class="btn btn-line sm" data-padj="1" aria-label="增加一次">＋</button></td>'+
           '<td>'+st(x)+'</td><td>'+dateShort(x.created_at)+'</td><td class="pact2">'+
-          (x.status==='pending'?'<button type="button" class="btn btn-fill sm" data-pst="confirmed">確認收款</button> <button type="button" class="btn btn-line sm" data-pst="cancelled">取消</button>':x.status==='confirmed'?'<button type="button" class="btn btn-line sm" data-pst="cancelled">取消</button>':'<button type="button" class="btn btn-line sm" data-pst="pending">恢復</button>')+'</td></tr>'}).join('')||'<tr><td colspan="8" class="none">還沒有人購買方案</td></tr>')+'</tbody></table></div>'+
-      '<p class="mfoot">「取消」後學生就不能再用這個方案上傳。「−」「＋」是調整剩餘次數(例如學生上傳錯了,補還一次)。'+(pend?'目前有 '+pend+' 筆待核對。':'')+'</p>'+
+          (x.status==='pending'?'<button type="button" class="btn btn-fill sm" data-pst="confirmed">確認收款</button> <button type="button" class="btn btn-line sm" data-pst="cancelled">取消</button>':x.status==='confirmed'?'<button type="button" class="btn btn-line sm" data-pst="cancelled">取消</button>':'<button type="button" class="btn btn-line sm" data-pst="pending">恢復</button>')+' <button type="button" class="btn btn-line sm rowdel" data-pdelp="'+esc(x.id)+'">刪除</button></td></tr>'}).join('')||'<tr><td colspan="8" class="none">還沒有人購買方案</td></tr>')+'</tbody></table></div>'+
+      '<p class="mfoot">「取消」後學生就不能再用這個方案上傳。「−」「＋」是調整剩餘次數(例如學生上傳錯了,補還一次)。「刪除」會把這筆購買紀錄整筆移除(要按兩次確認);已經上傳的作文與批改結果不會消失,只是不再算在這個方案裡。'+(pend?'目前有 '+pend+' 筆待核對。':'')+'</p>'+
       '<h3 style="margin-top:26px">方案與價格</h3><div class="twrap"><table class="tbl"><thead><tr><th>階段</th><th>方案</th><th>價格 NT$</th><th>原價 NT$(選填)</th><th>次數</th><th>開放</th><th></th></tr></thead><tbody>'+
       plans.map(function(p){return '<tr data-plr="'+esc(p.id)+'"><td>'+esc(lvLabel(p.level))+'</td><td>'+esc(p.name)+'</td><td><input type="number" min="0" step="10" data-f="price" value="'+p.price+'" style="width:96px"></td><td><input type="number" min="0" step="10" data-f="list" value="'+(p.list_price==null?'':p.list_price)+'" style="width:96px"></td><td>'+p.credits+'</td><td><input type="checkbox" data-f="active"'+(p.active?' checked':'')+' aria-label="開放"></td><td><button type="button" class="btn btn-line sm" data-plsave="'+esc(p.id)+'">儲存</button></td></tr>'}).join('')+'</tbody></table></div>'+
       '<p class="mfoot">價格改了只影響之後新選的方案;已經建立的購買紀錄金額不變。方案頁上的圖片是固定的,改價後請記得更新圖片。匯款帳戶資訊在「設定」分頁填寫。</p>';
@@ -2725,6 +2725,13 @@ function initAdmin(){
       b.disabled=true;var u=await sb.from('essay_purchases').update(patch).eq('id',id);
       if(u.error){toast('更新失敗:'+niceErr(u.error));b.disabled=false;return}
       toast(s2==='confirmed'?'已確認收款':s2==='cancelled'?'已取消':'已恢復為待核對');TABS.pp(body);
+    })});
+    $$('[data-pdelp]',body).forEach(function(b){b.addEventListener('click',async function(){
+      if(!b.classList.contains('arm')){b.classList.add('arm');b.textContent='再按一次,確定刪除';clearTimeout(b._t);b._t=setTimeout(function(){b.classList.remove('arm');b.textContent='刪除'},6000);return}
+      clearTimeout(b._t);b.disabled=true;
+      var u=await sb.from('essay_purchases').delete().eq('id',b.getAttribute('data-pdelp')).select('id');
+      if(u.error||!(u.data&&u.data.length)){toast('刪除失敗:'+(u.error?niceErr(u.error):'沒有權限或資料已不存在'));b.disabled=false;b.classList.remove('arm');b.textContent='刪除';return}
+      toast('已刪除這筆方案紀錄');TABS.pp(body);
     })});
     $$('[data-padj]',body).forEach(function(b){b.addEventListener('click',async function(){
       var tr=b.closest('[data-pp]'),id=tr.getAttribute('data-pp'),x=rows.filter(function(r){return r.id===id})[0],d=+b.getAttribute('data-padj');
