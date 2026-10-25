@@ -632,11 +632,29 @@ var COURSE_SEED={
   guoxie:{mats:['tulong','yitian','gaokao'],tagline:'知性題 × 情意題 × 寫作策略。審題、立意、架構、表達,一次掌握。',intro:'適用學測國寫。從知性題與情意題的審題、立意,到架構與表達,搭配《高中國寫之屠龍寶刀》《倚天神劍》《學測國寫全攻略》一起學。(章節為暫訂,待老師確認。)',audience:'準備學測的高中生'},
   guwen:{mats:['notes'],tagline:'逐篇精讀 × 重點統整 × 考點掌握。字詞註解、篇章理解、寫作手法、題型分析,一次掌握。',intro:'十五篇核心古文逐篇精讀:字詞註解、篇章理解、寫作手法與題型分析,考前一次複習完。搭配《國文學霸筆記――核心古文 15 篇》使用。(章節為暫訂,待老師確認。)',audience:'想打好古文底子的高中生'}
 };
+/* 已刪除/下架的內建教材與課程:前台隱藏卡片;教材頁、課程頁顯示「已下架」 */
+function goneP(id){var r=PUB.products[id],g=byId(GW.products,id);return !!(g&&((r&&r.removed)||(!r&&PUB.prodLoaded&&!g.dyn)))}
+function goneC(id){var r=PUB.courses[id];return !!(r&&r.status==='removed')}
+function hideGone(){
+  function note(host,txt){if(host&&!$('.gonenote',host)){var n=document.createElement('p');n.className='gonenote';n.setAttribute('role','status');n.textContent=txt;host.insertBefore(n,host.firstChild)}}
+  GW.products.forEach(function(g){
+    if(!goneP(g.id))return;
+    $$('#card-'+g.id).forEach(function(c){c.parentNode&&c.parentNode.removeChild(c)});
+    var pm=$('.pd-info [data-price="'+g.id+'"]');
+    if(pm){$$('.pd-info [data-add="'+g.id+'"]').forEach(function(b){b.style.display='none'});note($('.pd-info'),'這本教材已下架');var pr=pm.closest('.pd-price');if(pr)pr.style.display='none'}
+  });
+  GW.courses.forEach(function(g){
+    if(!goneC(g.id))return;
+    $$('#card-'+g.id).forEach(function(c){c.parentNode&&c.parentNode.removeChild(c)});
+    var eb=$('#enrollBtn[data-course="'+g.id+'"]');
+    if(eb){eb.disabled=true;eb.textContent='課程已下架';note($('.pd-info'),'這門課程已下架')}
+  });
+}
 function matsLinks(ids){
   if(!Array.isArray(ids))return '';
   return ids.map(function(pid){
     var g=byId(GW.products,pid),r=PUB.products[pid];
-    if(!g||(r&&r.active===false)||(g.dyn&&!(r&&r.active)))return '';
+    if(!g||(r&&(r.active===false||r.removed))||(g.dyn&&!(r&&r.active))||goneP(pid))return '';
     return '<a href="'+esc(g.url)+'" style="text-decoration:underline;text-underline-offset:3px">'+esc(g.title||g.name)+'</a>';
   }).filter(Boolean).join('、');
 }
@@ -682,19 +700,28 @@ function applyProductContent(){
     }
   });
 }
+function lpTx(n){return 'NT$'+(+n).toLocaleString('en-US')}
+function hasLp(list,price){return list!=null&&price!=null&&+list>+price}
 function tagPrice(){
-  $$('[data-price]').forEach(function(el){var p=byId(GW.products,el.getAttribute('data-price'));if(p)el.textContent=p.price.toLocaleString('en-US')});
+  $$('[data-price]').forEach(function(el){
+    var p=byId(GW.products,el.getAttribute('data-price'));if(!p)return;
+    el.textContent=p.price.toLocaleString('en-US');
+    var host=el.parentNode;if(!host)return;
+    $$('.lprice',host).forEach(function(x){x.parentNode.removeChild(x)});
+    if(hasLp(p.list_price,p.price)){var s=document.createElement('s');s.className='lprice';s.setAttribute('aria-label','原價 '+lpTx(p.list_price));s.textContent=lpTx(p.list_price);host.insertBefore(s,host.firstChild)}
+  });
 }
 /* 課程價格:以後台設定為準,顯示在課程頁與課程卡片 */
 function applyCoursePrice(){
   Object.keys(PUB.courses).forEach(function(id){
     var c=PUB.courses[id];if(c.price==null)return;
-    var tx=c.price>0?'NT$'+(+c.price).toLocaleString('en-US'):'免費';
-    $$('#card-'+id+' .c-meta').forEach(function(m){if(!$('.cprice',m)){var sp=document.createElement('span');sp.className='cprice';sp.textContent=tx;m.insertBefore(sp,m.firstChild)}});
+    var tx=c.price>0?'NT$'+(+c.price).toLocaleString('en-US'):'免費',lp=c.price>0&&hasLp(c.list_price,c.price)?lpTx(c.list_price):'';
+    function fillPrice(el){el.textContent='';if(lp){var s=document.createElement('s');s.className='lprice';s.setAttribute('aria-label','原價 '+lp);s.textContent=lp;el.appendChild(s)}el.appendChild(document.createTextNode(tx))}
+    $$('#card-'+id+' .c-meta').forEach(function(m){if(!$('.cprice',m)){var sp=document.createElement('span');sp.className='cprice';fillPrice(sp);m.insertBefore(sp,m.firstChild)}});
     var b=$('#enrollBtn');
     if(b&&b.getAttribute('data-course')===id){
       var ci=$('.cinfo');
-      if(ci){var ex=$('#cPrice',ci);if(!ex){ex=document.createElement('div');ex.id='cPrice';ex.innerHTML='<dt>課程價格</dt><dd></dd>';ci.insertBefore(ex,ci.firstChild)}$('dd',ex).textContent=tx}
+      if(ci){var ex=$('#cPrice',ci);if(!ex){ex=document.createElement('div');ex.id='cPrice';ex.innerHTML='<dt>課程價格</dt><dd></dd>';ci.insertBefore(ex,ci.firstChild)}fillPrice($('dd',ex))}
     }
   });
 }
@@ -847,7 +874,7 @@ async function selFb(table,cols,fb,order){
 function addDynProduct(r){
   if(!r||!r.id||!r.name||byId(GW.products,r.id))return;
   if(r.active===false&&!(typeof isAdmin==='function'&&isAdmin()))return;
-  GW.products.push({id:r.id,name:r.name,title:r.title||r.name,price:r.price,cover:'',url:'product.html?id='+encodeURIComponent(r.id),intro:'',feats:[],toc:[],extra:[],dyn:true,meta:r.meta||'',tagline:r.tagline||''});
+  GW.products.push({id:r.id,name:r.name,title:r.title||r.name,price:r.price,cover:'',url:'product.html?id='+encodeURIComponent(r.id),intro:'',feats:[],toc:[],extra:[],dyn:true,meta:r.meta||'',tagline:r.tagline||'',list_price:r.list_price==null?null:r.list_price});
 }
 function addDynCourse(r){
   if(!r||!r.id||!r.name||byId(GW.courses,r.id))return;
@@ -856,12 +883,13 @@ function addDynCourse(r){
 async function loadPublic(){
   try{
     var rs=await Promise.all([
-      selFb('products','id,name,title,price,active,kind,sort,meta,tagline,category_id,cover_path,intro,feats,toc,gallery',['id,name,title,price,active,kind,sort,meta,tagline,cover_path,intro,feats,toc,gallery','id,price,active,kind,cover_path,intro,feats,toc,gallery'],'sort'),
-      selFb('courses','id,name,price,status,sort,intro,tagline,audience,cover_path,materials',['id,name,price,status,sort,intro,tagline,audience,cover_path','id,price,status'],'sort'),
+      selFb('products','id,name,title,price,list_price,removed,active,kind,sort,meta,tagline,category_id,cover_path,intro,feats,toc,gallery',['id,name,title,price,active,kind,sort,meta,tagline,category_id,cover_path,intro,feats,toc,gallery','id,name,title,price,active,kind,sort,meta,tagline,cover_path,intro,feats,toc,gallery','id,price,active,kind,cover_path,intro,feats,toc,gallery'],'sort'),
+      selFb('courses','id,name,price,list_price,status,sort,intro,tagline,audience,cover_path,materials',['id,name,price,status,sort,intro,tagline,audience,cover_path,materials','id,name,price,status,sort,intro,tagline,audience,cover_path','id,price,status'],'sort'),
       sb.from('plans').select('id,name,amount,period_type,frequency,active'),sb.from('site_settings').select('key,value'),
       sb.from('resources').select('id,name,gate,storage_path,href'),sb.from('course_chapters').select('course_id,position,title').order('position'),sb.from('product_categories').select('id,name,subtitle,sort').order('sort')]);
     PUB.cats=(rs[6]&&rs[6].data)||[];
-    (rs[0].data||[]).forEach(function(r){PUB.products[r.id]=r;var p=byId(GW.products,r.id);if(p)p.price=r.price;else addDynProduct(r)});
+    PUB.prodLoaded=!!(rs[0]&&!rs[0].error&&(rs[0].data||[]).length);
+    (rs[0].data||[]).forEach(function(r){PUB.products[r.id]=r;var p=byId(GW.products,r.id);if(p){p.price=r.price;p.list_price=r.list_price==null?null:r.list_price}else addDynProduct(r)});
     (rs[1].data||[]).forEach(function(r){PUB.courses[r.id]=r;addDynCourse(r)});
     (rs[2].data||[]).forEach(function(r){PUB.plans[r.id]=r});
     (rs[4].data||[]).forEach(function(r){PUB.resources[r.id]=r});
@@ -876,7 +904,7 @@ async function loadPublic(){
   }catch(e){}
   renderDyn();
   tagPrice();applyProductContent();
-  applyChapters();applyCoursePrice();applyCourseContent();
+  applyChapters();applyCoursePrice();applyCourseContent();hideGone();
   Object.keys(PUB.products).forEach(function(id){
     if(!PUB.products[id].active)$$('[data-add="'+id+'"]').forEach(function(b){b.classList.add('off');b.setAttribute('title','暫時無法購買')});
   });
@@ -1109,6 +1137,7 @@ function initCourse(){
     var db=PUB.courses[cid],en=!!ENR[cid]&&!!U;
     if(!ready){btn.disabled=true;btn.textContent='載入中…';return}
     if(en){btn.disabled=false;btn.textContent='已報名(前往學習環境)';return}
+    if(db&&db.status==='removed'){btn.disabled=true;btn.textContent='課程已下架';return}
     if(!db||(db.status!=='open'&&!isAdmin())){btn.disabled=true;btn.textContent='課程籌備中';return}
     if(db.price>0&&!PUB.pay){btn.disabled=true;btn.textContent='課程付款尚未開放';return}
     btn.disabled=false;btn.textContent=db.price>0?'購買課程 NT$'+db.price.toLocaleString('en-US'):'免費報名';
@@ -1392,6 +1421,16 @@ function scoreTx(e,detail){
     if(e.score_emo!=null&&e.score_emo_max!=null)P.push('情意題 '+(+e.score_emo)+' / '+(+e.score_emo_max));
     return P.join('・')}
   return e.score!=null&&e.score_max!=null?(+e.score)+' / '+(+e.score_max):''}
+function scoreBoxHtml(e){
+  if(!scoreTx(e))return '';
+  if(!scoreParts(e))return '<div class="scorebox"><span>分數</span><b>'+esc(scoreTx(e,true))+'</b></div>';
+  var h='<div class="scorebox sbx"><span>分數</span><div class="sbl">';
+  if(e.score_info!=null&&e.score_info_max!=null){
+    h+='<div class="sbr"><em>知性題</em><b>'+(+e.score_info)+' / '+(+e.score_info_max)+'</b></div>';
+    if(e.score_info1!=null&&e.score_info1_max!=null)h+='<div class="sbr sub"><em>第一小題</em><b>'+(+e.score_info1)+' / '+(+e.score_info1_max)+'</b></div>';
+    if(e.score_info2!=null&&e.score_info2_max!=null)h+='<div class="sbr sub"><em>第二小題</em><b>'+(+e.score_info2)+' / '+(+e.score_info2_max)+'</b></div>'}
+  if(e.score_emo!=null&&e.score_emo_max!=null)h+='<div class="sbr"><em>情意題</em><b>'+(+e.score_emo)+' / '+(+e.score_emo_max)+'</b></div>';
+  return h+'</div></div>'}
 function dateShort(t){var d=new Date(t);return (d.getMonth()+1)+'/'+d.getDate()}
 
 var ELV={
@@ -1747,7 +1786,7 @@ function initMember(){
       var sm=await signedMap(fpaths);if(my!==rendering)return;
       if(es.some(function(x){return x.status==='graded'&&!x.student_seen_at})){sb.rpc('mark_essays_seen').then(function(){UNSEEN=0})}
       body='<h2>我的作文</h2><ul class="mlist">'+(es.map(function(e){
-        var fb=e.status==='graded'?'<div class="fbk">'+(scoreTx(e)?'<div class="scorebox"><span>分數</span><b>'+esc(scoreTx(e,true))+'</b></div>':'')+'<b>老師評語</b><p>'+esc(e.feedback||'(老師已批改,沒有文字評語)').replace(/\n/g,'<br>')+'</p>'+e.essay_files.filter(function(f){return f.kind==='feedback'&&sm[f.path]}).sort(function(a,b){return a.page_no-b.page_no}).map(function(f){return '<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="老師批改照片" loading="lazy"></a>'}).join('')+'</div>':'';
+        var fb=e.status==='graded'?'<div class="fbk">'+scoreBoxHtml(e)+'<b>老師評語</b><p>'+esc(e.feedback||'(老師已批改,沒有文字評語)').replace(/\n/g,'<br>')+'</p>'+e.essay_files.filter(function(f){return f.kind==='feedback'&&sm[f.path]}).sort(function(a,b){return a.page_no-b.page_no}).map(function(f){return '<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="老師批改照片" loading="lazy"></a>'}).join('')+'</div>':'';
         var subs=e.essay_files.filter(function(f){return f.kind==='submission'}).sort(function(a,b){return a.page_no-b.page_no});
         var n=subs.length;
         var imgs=subs.filter(function(f){return sm[f.path]}).map(function(f,i){return '<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="作文第 '+(i+1)+' 頁" loading="lazy"></a>'}).join('');
@@ -1881,7 +1920,7 @@ function initAdmin(){
       shown.map(function(e){var teacher=e.source==='teacher',pm=PM[e.purchase_id],lv=essLv(e);
         var cat=pm?esc(lvLabel(pm.level))+'<br><small>'+esc(pm.plan_name)+(pm.credits_total>1?'<br>已使用 '+pm.credits_used+' 篇・<b>剩餘 '+(pm.credits_total-pm.credits_used)+' 篇</b>':'')+'</small>':(lv?esc(lvLabel(lv)):'—');
         var pay=pm?(pm.status==='confirmed'?'<button type="button" class="pill ok payb" data-ufmp="'+esc(pm.id)+'" title="點一下改回待確認">已確認</button>':pm.status==='cancelled'?'<span class="pill">已取消</span>':'<button type="button" class="pill warn payb" data-cfmp="'+esc(pm.id)+'" title="核對無誤後點一下改成已確認">待確認</button>'):'<span class="muted">—</span>';
-        return '<tr><td>'+esc(teacher?(e.source_note||'(老師自行上傳)'):nm(e.student_id))+'</td><td>'+esc(e.title)+'</td><td>'+esc(e.grade||'')+'</td><td>'+cat+'</td><td><b>'+esc(e.pay_code||'—')+'</b></td><td>'+pay+'</td><td><span class="pill'+(teacher?' ok':'')+'">'+(teacher?'老師上傳':'學生上傳')+'</span></td><td>'+dateShort(e.created_at)+'</td><td><span class="pill '+(e.status==='pending'?'warn':'ok')+'">'+STATUS_ES[e.status]+'</span>'+(scoreTx(e)?' <small>'+esc(scoreTx(e))+'</small>':'')+'</td><td><button type="button" class="btn btn-line sm" data-gr="'+e.id+'">'+(e.status==='pending'?'批改':'查看')+'</button></td></tr>'}).join('')+(shown.length?'':'<tr><td colspan="10" class="none">'+(rows.length?'這個階段還沒有作文':'還沒有作文')+'</td></tr>')+'</tbody></table></div>';
+        return '<tr><td>'+esc(teacher?(e.source_note||'(老師自行上傳)'):nm(e.student_id))+'</td><td>'+esc(e.title)+'</td><td>'+esc(e.grade||'')+'</td><td>'+cat+'</td><td><b>'+esc(e.pay_code||'—')+'</b></td><td>'+pay+'</td><td><span class="pill'+(teacher?' ok':'')+'">'+(teacher?'老師上傳':'學生上傳')+'</span></td><td>'+dateShort(e.created_at)+'</td><td><span class="pill '+(e.status==='pending'?'warn':'ok')+'">'+STATUS_ES[e.status]+'</span>'+(scoreTx(e)?' <small>'+esc(scoreTx(e))+'</small>':'')+'</td><td><button type="button" class="btn btn-line sm" data-gr="'+e.id+'">'+(e.status==='pending'?'批改':'查看')+'</button> <button type="button" class="btn btn-line sm rowdel" data-rdel="'+e.id+'" data-ti="'+esc(e.title)+'">刪除</button></td></tr>'}).join('')+(shown.length?'':'<tr><td colspan="10" class="none">'+(rows.length?'這個階段還沒有作文':'還沒有作文')+'</td></tr>')+'</tbody></table></div>';
     body.innerHTML=h;
     var tt=$('#tToggle');tt.addEventListener('click',function(){tf.open=!tf.open;render()});
     var tForm=$('#tForm');
@@ -1916,6 +1955,20 @@ function initAdmin(){
     })})}
     setPay('data-cfmp','confirmed');setPay('data-ufmp','pending');
     $$('[data-gr]',body).forEach(function(b){b.addEventListener('click',function(){openGrade(b.getAttribute('data-gr'),rows,essLv)})});
+    $$('[data-rdel]',body).forEach(function(b){b.addEventListener('click',async function(){
+      if(!b.classList.contains('arm')){b.classList.add('arm');b.textContent='再按一次確認刪除';clearTimeout(b._t);b._t=setTimeout(function(){b.classList.remove('arm');b.textContent='刪除'},6000);return}
+      clearTimeout(b._t);b.disabled=true;b.textContent='刪除中…';
+      var id=b.getAttribute('data-rdel'),ti=b.getAttribute('data-ti')||'';
+      try{
+        var fr=await sb.from('essay_files').select('path').eq('essay_id',id);
+        var ps=(fr.data||[]).map(function(f){return f.path});
+        var dr=await sb.from('essays').delete().eq('id',id).select('id');
+        if(dr.error)throw dr.error;
+        if(!dr.data||!dr.data.length)throw new Error('沒有刪除成功,請重新整理後再試');
+        if(ps.length){try{await sb.storage.from('essays').remove(ps)}catch(_){}}
+        toast('已刪除「'+ti+'」');TABS.e(body);tiles();
+      }catch(ex){b.disabled=false;b.classList.remove('arm');b.textContent='刪除';toast('刪除失敗:'+niceErr(ex))}
+    })});
   };
   async function openGrade(id,rows,essLv){
     var e=rows.filter(function(x){return x.id===id})[0];if(!e)return;
@@ -2057,12 +2110,38 @@ function initAdmin(){
     var profs=await loadNames();
     var mr=await sb.from('memberships').select('user_id,plan,status,valid_until,source');
     var mm={};(mr.data||[]).forEach(function(x){mm[x.user_id]=x});
+    var aer=await sb.from('admin_emails').select('email'),AE=((aer&&aer.data)||[]).map(function(x){return String(x.email||'').toLowerCase()});
     var q='';
+    var teachers=profs.filter(function(p){return p.role==='admin'});
+    var tmail={};teachers.forEach(function(p){tmail[String(p.email||'').toLowerCase()]=1});
+    var pending=AE.filter(function(m){return !tmail[m]});
+    function armBtn(b,label,ask){
+      if(!b.classList.contains('arm')){b.classList.add('arm');b.textContent=ask;clearTimeout(b._t);b._t=setTimeout(function(){b.classList.remove('arm');b.textContent=label},6000);return false}
+      clearTimeout(b._t);return true}
+    function bindUn(sel){$$(sel,body).forEach(function(b){b.addEventListener('click',async function(){
+      if(!armBtn(b,'取消老師','再按一次,確定取消'))return;
+      b.disabled=true;if(await removeTeacher(b.getAttribute('data-untch'))){TABS.m(body)}else{b.disabled=false;b.classList.remove('arm');b.textContent='取消老師'}
+    })})}
+    async function addTeacher(email){
+      email=String(email||'').trim().toLowerCase();
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('請輸入正確的 Email');return false}
+      var r=await sb.from('admin_emails').insert({email:email});
+      if(r.error&&r.error.code!=='23505'){toast('新增失敗:'+niceErr(r.error));return false}
+      var u2=await sb.from('profiles').update({role:'admin'}).eq('email',email);
+      if(u2&&u2.error){toast('已加入名單,但帳號升級失敗:'+niceErr(u2.error));return false}
+      toast('已新增老師 '+email+'。對方用這個 Google 帳號登入就能進後台');return true}
+    async function removeTeacher(email){
+      email=String(email||'').toLowerCase();
+      var d=await sb.from('admin_emails').delete().eq('email',email);
+      if(d.error){toast('取消失敗:'+niceErr(d.error));return false}
+      var u2=await sb.from('profiles').update({role:'student'}).eq('email',email);
+      if(u2&&u2.error){toast('取消失敗:'+niceErr(u2.error));return false}
+      toast('已取消 '+email+' 的老師資格');return true}
     function draw(){
       var list=profs.filter(function(p){return !q||((p.name||'')+(p.email||'')).toLowerCase().indexOf(q)>-1});
       $('#mRows').innerHTML=list.map(function(p){
         var m=mm[p.id],on=m&&new Date(m.valid_until).getTime()+3*864e5>Date.now();
-        return '<tr><td>'+esc(p.name||'')+'</td><td>'+esc(p.email)+'</td><td>'+fmtDate(p.created_at)+'</td><td><span class="pill '+(on?'ok':'')+'">'+(on?(m.source==='manual'?'手動開通':planName(m.plan)):'免費')+'</span>'+(m?'<small class="sub"> 到 '+fmtDate(m.valid_until)+(m.status==='cancelled'?'・已取消續約':'')+'</small>':'')+'</td><td>'+(p.role==='admin'?'老師':'<select data-grant="'+p.id+'"><option value="">手動開通…</option><option value="30">30 天</option><option value="90">90 天</option><option value="365">1 年</option></select>'+(on?' <button type="button" class="btn btn-line sm" data-stop="'+p.id+'">停用</button>':''))+'</td></tr>'}).join('')||'<tr><td colspan="5" class="none">沒有符合的會員</td></tr>';
+        return '<tr><td>'+esc(p.name||'')+'</td><td>'+esc(p.email)+'</td><td>'+fmtDate(p.created_at)+'</td><td><span class="pill '+(on?'ok':'')+'">'+(on?(m.source==='manual'?'手動開通':planName(m.plan)):'免費')+'</span>'+(m?'<small class="sub"> 到 '+fmtDate(m.valid_until)+(m.status==='cancelled'?'・已取消續約':'')+'</small>':'')+'</td><td>'+(p.role==='admin'?'<span class="pill ok">老師</span>'+(p.id===U.id?' <small class="sub">(你自己)</small>':' <button type="button" class="btn btn-line sm" data-untch="'+esc(p.email)+'">取消老師</button>'):'<button type="button" class="btn btn-line sm" data-mkteach="'+esc(p.email)+'">設為老師</button> <select data-grant="'+p.id+'"><option value="">手動開通…</option><option value="30">30 天</option><option value="90">90 天</option><option value="365">1 年</option></select>'+(on?' <button type="button" class="btn btn-line sm" data-stop="'+p.id+'">停用</button>':''))+'</td></tr>'}).join('')||'<tr><td colspan="5" class="none">沒有符合的會員</td></tr>';
       $$('[data-grant]',body).forEach(function(s){s.addEventListener('change',async function(){
         if(!s.value)return;var uid=s.getAttribute('data-grant'),old=mm[uid],base=old&&new Date(old.valid_until).getTime()>Date.now()?new Date(old.valid_until).getTime():Date.now();
         var until=new Date(base+(+s.value)*864e5).toISOString(),res;
@@ -2071,6 +2150,11 @@ function initAdmin(){
         if(res.error){toast('開通失敗:'+niceErr(res.error));return}
         toast('已手動開通');TABS.m(body);tiles();
       })});
+      $$('#mRows [data-mkteach]',body).forEach(function(b){b.addEventListener('click',async function(){
+        if(!armBtn(b,'設為老師','再按一次,確定設為老師'))return;
+        b.disabled=true;if(await addTeacher(b.getAttribute('data-mkteach'))){TABS.m(body)}else{b.disabled=false;b.classList.remove('arm');b.textContent='設為老師'}
+      })});
+      bindUn('#mRows [data-untch]');
       $$('[data-stop]',body).forEach(function(b){b.addEventListener('click',async function(){
         var uid=b.getAttribute('data-stop');
         var res=await sb.from('memberships').update({status:'cancelled',valid_until:new Date(Date.now()-4*864e5).toISOString(),updated_at:new Date().toISOString()}).eq('user_id',uid);
@@ -2078,8 +2162,14 @@ function initAdmin(){
         toast('已停用。若對方是用信用卡訂閱,請另外請他到會員專區取消續約');TABS.m(body);tiles();
       })});
     }
-    body.innerHTML='<label class="fld" for="mQ" style="max-width:320px;margin-bottom:12px">搜尋姓名或 Email<input id="mQ" type="search"></label><div class="twrap"><table class="tbl"><thead><tr><th>姓名</th><th>Email</th><th>加入日</th><th>付費會員</th><th></th></tr></thead><tbody id="mRows"></tbody></table></div><p class="mfoot">客人在網站付款成功後,系統會自動開通,這裡不用處理。手動開通只用在退款、補開或贈送的情況。</p>';
+    var tbox='<div class="upanel tbox" id="tchBox"><h3>老師帳號</h3><p class="lead" style="margin-bottom:10px">老師可以登入這個後台。輸入對方的 Google 帳號 Email 就能新增;對方還沒登入過網站也可以先加,等他登入就會成為老師。</p><ul class="mlist tlist">'+
+      teachers.map(function(p){return '<li><span><b>'+esc(p.name||p.email)+'</b><br><small>'+esc(p.email)+(p.id===U.id?'(你自己)':'')+'</small></span>'+(p.id===U.id?'':'<button type="button" class="btn btn-line sm" data-untch="'+esc(p.email)+'">取消老師</button>')+'</li>'}).join('')+
+      pending.map(function(m){return '<li><span><b>'+esc(m)+'</b><br><small>尚未登入過網站</small></span><button type="button" class="btn btn-line sm" data-untch="'+esc(m)+'">取消老師</button></li>'}).join('')+
+      '</ul><form id="tchForm" novalidate style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px"><label class="fld" for="tchMail" style="flex:1;min-width:220px;margin:0">新增老師(Google 帳號 Email)<input id="tchMail" type="email" placeholder="teacher@gmail.com" maxlength="120"></label><button type="submit" class="btn btn-fill sm" id="tchGo">新增老師</button></form></div>';
+    body.innerHTML=tbox+'<label class="fld" for="mQ" style="max-width:320px;margin-bottom:12px">搜尋姓名或 Email<input id="mQ" type="search"></label><div class="twrap"><table class="tbl"><thead><tr><th>姓名</th><th>Email</th><th>加入日</th><th>付費會員</th><th></th></tr></thead><tbody id="mRows"></tbody></table></div><p class="mfoot">客人在網站付款成功後,系統會自動開通,這裡不用處理。手動開通只用在退款、補開或贈送的情況。</p>';
     $('#mQ').addEventListener('input',function(){q=this.value.trim().toLowerCase();draw()});
+    bindUn('#tchBox [data-untch]');
+    $('#tchForm').addEventListener('submit',async function(e){e.preventDefault();var go=$('#tchGo');go.disabled=true;if(await addTeacher($('#tchMail').value)){TABS.m(body)}else go.disabled=false});
     draw();
   };
 
@@ -2120,14 +2210,14 @@ function initAdmin(){
     var newForm='<details class="addbox" id="pNewBox"><summary>＋ 新增教材</summary><form id="pNew" novalidate>'+
       '<label class="fld">書名(顯示在教材卡片與購物車)<input type="text" id="pnName" maxlength="40" placeholder="例如:國文學霸筆記・續集"></label>'+
       '<label class="fld">完整書名(教材頁大標題,可留空沿用書名)<input type="text" id="pnTitle" maxlength="60"></label>'+
-      '<div class="row2"><label class="fld">售價 NT$<input type="number" id="pnPrice" min="0" step="10" value="600"></label><label class="fld">類型<select id="pnKind"><option value="physical">實體書(需寄送)</option><option value="digital">電子檔</option></select></label></div>'+
+      '<div class="row2"><label class="fld">售價(優惠價)NT$<input type="number" id="pnPrice" min="0" step="10" value="600"></label><label class="fld">原價 NT$(選填,會顯示劃掉的原價)<input type="number" id="pnList" min="1" step="10" placeholder="沒有就留空"></label></div><div class="row2"><label class="fld">類型<select id="pnKind"><option value="physical">實體書(需寄送)</option><option value="digital">電子檔</option></select></label></div>'+
       (catOk?'<label class="fld">放進哪個專區<select id="pnCat">'+catOpts('','未分類(顯示在「其他教材」)')+'</select></label>':'')+
       '<label class="fld">分類說明(卡片上的小字)<input type="text" id="pnMeta" maxlength="80" placeholder="例如:寫作素材・內文約 146 頁"></label>'+
       '<label class="fld">一句話標語<input type="text" id="pnTag" maxlength="120"></label>'+
       '<button type="submit" class="btn btn-fill sm">建立教材</button> <span class="mfoot">建立後先是「未上架」,只有你看得到;補完封面、簡介、目錄,再勾選「上架」並按儲存,前台就會出現。</span></form></details>';
-    body.innerHTML=catBox+newForm+'<div class="twrap"><table class="tbl"><thead><tr><th>教材</th><th>售價(NT$)</th><th>類型</th>'+(catOk?'<th>專區</th>':'')+'<th>上架</th><th></th></tr></thead><tbody>'+rows.map(function(p){
-      return '<tr data-prow="'+esc(p.id)+'"><td>'+esc(p.name)+'</td><td><input type="number" min="0" step="10" value="'+p.price+'" data-f="price" style="width:90px"></td><td><select data-f="kind"><option value="physical"'+(p.kind==='physical'?' selected':'')+'>實體書(需寄送)</option><option value="digital"'+(p.kind==='digital'?' selected':'')+'>電子檔</option></select></td>'+(catOk?'<td><select data-f="cat">'+catOpts(p.category_id||'')+'</select></td>':'')+'<td><input type="checkbox" data-f="active"'+(p.active?' checked':'')+' aria-label="上架"></td><td class="pact2"><button type="button" class="btn btn-line sm" data-save="'+esc(p.id)+'">儲存</button> <button type="button" class="btn btn-line sm" data-edit="'+esc(p.id)+'" aria-expanded="false">編輯內容與圖片</button>'+((byId(GW.products,p.id)||{}).dyn?' <button type="button" class="btn btn-line sm pdel" data-pdel="'+esc(p.id)+'">刪除</button>':'')+'</td></tr>'+
-        '<tr data-erow="'+esc(p.id)+'" hidden><td colspan="6"></td></tr>'}).join('')+'</tbody></table></div><p class="mfoot">價格會立刻套用到網站與結帳。已付款的舊訂單金額不受影響。「編輯內容與圖片」可以自己換封面、改簡介、特色與目錄,以及上傳內頁圖。自己新增的教材可以按「刪除」;網站內建的教材不能刪除,不想賣時取消「上架」並按儲存。</p>';
+    body.innerHTML=catBox+newForm+'<div class="twrap"><table class="tbl"><thead><tr><th>教材</th><th>優惠價/售價(NT$)</th><th>原價(NT$,選填)</th><th>類型</th>'+(catOk?'<th>專區</th>':'')+'<th>上架</th><th></th></tr></thead><tbody>'+rows.filter(function(p){return !p.removed}).map(function(p){
+      return '<tr data-prow="'+esc(p.id)+'"><td>'+esc(p.name)+'</td><td><input type="number" min="0" step="10" value="'+p.price+'" data-f="price" style="width:90px"></td><td><input type="number" min="1" step="10" value="'+(p.list_price==null?'':p.list_price)+'" data-f="lprice" placeholder="沒有就留空" style="width:100px" aria-label="原價"></td><td><select data-f="kind"><option value="physical"'+(p.kind==='physical'?' selected':'')+'>實體書(需寄送)</option><option value="digital"'+(p.kind==='digital'?' selected':'')+'>電子檔</option></select></td>'+(catOk?'<td><select data-f="cat">'+catOpts(p.category_id||'')+'</select></td>':'')+'<td><input type="checkbox" data-f="active"'+(p.active?' checked':'')+' aria-label="上架"></td><td class="pact2"><button type="button" class="btn btn-line sm" data-save="'+esc(p.id)+'">儲存</button> <button type="button" class="btn btn-line sm" data-edit="'+esc(p.id)+'" aria-expanded="false">編輯內容與圖片</button>'+' <button type="button" class="btn btn-line sm pdel" data-pdel="'+esc(p.id)+'">刪除</button></td></tr>'+
+        '<tr data-erow="'+esc(p.id)+'" hidden><td colspan="8"></td></tr>'}).join('')+'</tbody></table></div>'+(rows.some(function(p){return p.removed})?'<details class="addbox" id="pGone"><summary>已刪除的教材('+rows.filter(function(p){return p.removed}).length+')</summary><ul class="mlist">'+rows.filter(function(p){return p.removed}).map(function(p){return '<li><span><b>'+esc(p.name)+'</b></span><button type="button" class="btn btn-line sm" data-prest="'+esc(p.id)+'">還原</button></li>'}).join('')+'</ul></details>':'')+'<p class="mfoot">價格會立刻套用到網站與結帳。要顯示「原價劃掉、旁邊是優惠價」,在「原價」填比售價高的金額;不想顯示就留空。已付款的舊訂單金額不受影響。「編輯內容與圖片」可以自己換封面、改簡介、特色與目錄,以及上傳內頁圖。按「刪除」後前台就看不到這本教材;已經有訂單的教材會保留紀錄,可以在下方「已刪除的教材」還原。</p>';
     if(catOk){
       var cnf=$('#catNew',body);
       cnf.addEventListener('submit',async function(ev){
@@ -2173,8 +2263,10 @@ function initAdmin(){
       var name=$('#pnName').value.trim(),price=parseInt($('#pnPrice').value,10);
       if(!name){toast('請輸入書名');return}
       if(!(price>=0)){toast('請輸入正確的售價');return}
+      var lpv=$('#pnList').value.trim(),lp=lpv===''?null:parseInt(lpv,10);
+      if(lp!==null&&!(lp>price)){toast('原價要比售價高,或留空');return}
       var mx=rows.reduce(function(m,x){return Math.max(m,x.sort||0)},0);
-      var row={id:'p'+Date.now().toString(36),name:name,title:$('#pnTitle').value.trim()||name,price:price,kind:$('#pnKind').value,active:false,sort:mx+1,meta:$('#pnMeta').value.trim()||null,tagline:$('#pnTag').value.trim()||null};
+      var row={id:'p'+Date.now().toString(36),name:name,title:$('#pnTitle').value.trim()||name,price:price,list_price:lp,kind:$('#pnKind').value,active:false,sort:mx+1,meta:$('#pnMeta').value.trim()||null,tagline:$('#pnTag').value.trim()||null};
       if(catOk&&$('#pnCat')&&$('#pnCat').value)row.category_id=$('#pnCat').value;
       var ins=await sb.from('products').insert(row);
       if(ins.error){toast('新增失敗:'+niceErr(ins.error));return}
@@ -2191,10 +2283,17 @@ function initAdmin(){
           clearTimeout(t);t=setTimeout(function(){b.classList.remove('arm');b.textContent='刪除'},5000);return;
         }
         clearTimeout(t);b.disabled=true;
-        var d=await sb.from('products').delete().eq('id',id);
+        var isDyn=!!(byId(GW.products,id)||{}).dyn,d;
+        if(isDyn)d=await sb.from('products').delete().eq('id',id);
+        if(!isDyn||(d.error&&d.error.code==='23503')){
+          var mk=await sb.from('products').update({removed:true,active:false}).eq('id',id);
+          if(mk.error){b.disabled=false;b.classList.remove('arm');b.textContent='刪除';toast('刪除失敗:'+niceErr(mk.error));return}
+          if(PUB.products[id]){PUB.products[id].removed=true;PUB.products[id].active=false}
+          toast('已刪除「'+(r0.name||id)+'」。前台不會再顯示,需要時可在下方「已刪除的教材」還原');await TABS.p(body);return;
+        }
         if(d.error){
           b.disabled=false;b.classList.remove('arm');b.textContent='刪除';
-          toast(d.error.code==='23503'?'這本教材已經有訂單紀錄,不能刪除。請取消「上架」並按儲存,前台就看不到了。':'刪除失敗:'+niceErr(d.error));return;
+          toast('刪除失敗:'+niceErr(d.error));return;
         }
         var paths=[r0.cover_path].concat((Array.isArray(r0.gallery)?r0.gallery:[]).map(function(x){return x&&x.path})).filter(Boolean);
         if(paths.length){try{await sb.storage.from('product-media').remove(paths)}catch(_){}}
@@ -2202,11 +2301,20 @@ function initAdmin(){
         toast('已刪除教材');await TABS.p(body);
       });
     });
+    $$('[data-prest]',body).forEach(function(b){b.addEventListener('click',async function(){
+      b.disabled=true;var id=b.getAttribute('data-prest'),u=await sb.from('products').update({removed:false}).eq('id',id);
+      if(u.error){b.disabled=false;toast('還原失敗:'+niceErr(u.error));return}
+      if(PUB.products[id])PUB.products[id].removed=false;
+      toast('已還原。它目前是「未上架」,確認內容後勾選「上架」並按儲存');await TABS.p(body);
+    })});
     $$('[data-save]',body).forEach(function(b){b.addEventListener('click',async function(){
       var tr=b.closest('tr'),price=parseInt($('[data-f=price]',tr).value,10);
       if(!(price>=0)){toast('請輸入正確的價格');return}
-      var up={price:price,kind:$('[data-f=kind]',tr).value,active:$('[data-f=active]',tr).checked};var cs=$('[data-f=cat]',tr);if(cs)up.category_id=cs.value||null;
+      var lv=$('[data-f=lprice]',tr).value.trim(),lpn=lv===''?null:parseInt(lv,10);
+      if(lpn!==null&&!(lpn>price)){toast('原價要比售價高,或留空');return}
+      var up={price:price,list_price:lpn,kind:$('[data-f=kind]',tr).value,active:$('[data-f=active]',tr).checked};var cs=$('[data-f=cat]',tr);if(cs)up.category_id=cs.value||null;
       var u=await sb.from('products').update(up).eq('id',b.getAttribute('data-save'));
+      if(!u.error){var gp=byId(GW.products,b.getAttribute('data-save'));if(gp){gp.price=price;gp.list_price=lpn}}
       toast(u.error?'儲存失敗:'+niceErr(u.error):'已儲存');
     })});
     $$('[data-edit]',body).forEach(function(b){b.addEventListener('click',function(){
@@ -2301,32 +2409,35 @@ function initAdmin(){
   /* --- 課程 --- */
   var OPEN_C={};
   TABS.c=async function(body){
-    var cr=await selFb('courses','id,name,price,status,sort,intro,tagline,audience,cover_path,materials',['id,name,price,status,sort,intro,tagline,audience,cover_path','id,name,price,status,sort'],'sort');
+    var cr=await selFb('courses','id,name,price,list_price,status,sort,intro,tagline,audience,cover_path,materials',['id,name,price,status,sort,intro,tagline,audience,cover_path,materials','id,name,price,status,sort,intro,tagline,audience,cover_path','id,name,price,status,sort'],'sort');
     var chr=await sb.from('course_chapters').select('id,course_id,position,title,is_preview').order('position');
     var ids=(chr.data||[]).map(function(x){return x.id});
     var vr=ids.length?await sb.from('chapter_videos').select('chapter_id,youtube_id').in('chapter_id',ids):{data:[]};
     var vm={};(vr.data||[]).forEach(function(x){vm[x.chapter_id]=x.youtube_id});
     var h='';
-    (cr.data||[]).forEach(function(c){
+    (cr.data||[]).filter(function(c){return c.status!=='removed'}).forEach(function(c){
       var chs=(chr.data||[]).filter(function(x){return x.course_id===c.id});
-      h+='<div class="ccfg" data-crow="'+esc(c.id)+'"><div class="ccfg-h"><b>'+esc(c.name)+'</b><label>狀態 <select data-f="status"><option value="draft"'+(c.status==='draft'?' selected':'')+'>籌備中</option><option value="open"'+(c.status==='open'?' selected':'')+'>開放報名</option></select></label><label>價格 NT$ <input type="number" min="0" step="10" data-f="price" value="'+c.price+'" style="width:90px"></label><button type="button" class="btn btn-line sm" data-csave="'+esc(c.id)+'">儲存</button>'+((byId(GW.courses,c.id)||{}).dyn?'<button type="button" class="btn btn-line sm pdel" data-cdel="'+esc(c.id)+'">刪除課程</button>':'')+'</div><p class="mfoot" style="margin:0 0 8px">價格填 0 代表免費報名。</p>'+
+      h+='<div class="ccfg" data-crow="'+esc(c.id)+'"><div class="ccfg-h"><b>'+esc(c.name)+'</b><label>狀態 <select data-f="status"><option value="draft"'+(c.status==='draft'?' selected':'')+'>籌備中</option><option value="open"'+(c.status==='open'?' selected':'')+'>開放報名</option></select></label><label>優惠價/售價 NT$ <input type="number" min="0" step="10" data-f="price" value="'+c.price+'" style="width:90px"></label><label>原價 NT$ <input type="number" min="1" step="10" data-f="lprice" value="'+(c.list_price==null?'':c.list_price)+'" placeholder="沒有就留空" style="width:100px"></label><button type="button" class="btn btn-line sm" data-csave="'+esc(c.id)+'">儲存</button><button type="button" class="btn btn-line sm pdel" data-cdel="'+esc(c.id)+'">刪除課程</button></div><p class="mfoot" style="margin:0 0 8px">價格填 0 代表免費報名。要顯示「原價劃掉、旁邊是優惠價」,在「原價」填比售價高的金額;不想顯示就留空。</p>'+
         '<div class="twrap"><table class="tbl"><thead><tr><th>#</th><th>章節</th><th>YouTube 網址或影片代碼</th><th>試看</th><th></th></tr></thead><tbody>'+chs.map(function(ch){
           return '<tr data-ch="'+ch.id+'"><td>'+(ch.position+1)+'</td><td><input data-f="title" value="'+esc(ch.title)+'" maxlength="80"></td><td><input data-f="yt" value="'+esc(vm[ch.id]||'')+'" placeholder="https://youtu.be/…"></td><td><input type="checkbox" data-f="prev"'+(ch.is_preview?' checked':'')+' aria-label="試看"></td><td><button type="button" class="btn btn-line sm" data-chsave="'+ch.id+'">儲存</button> <button type="button" class="btn btn-line sm pdel" data-chdel="'+ch.id+'">刪除</button></td></tr>'}).join('')+'</tbody></table></div><button type="button" class="btn btn-line sm" data-chadd="'+esc(c.id)+'" style="margin-top:8px">＋ 新增章節</button></div>';
     });
     var newC='<details class="addbox" id="cNewBox"><summary>＋ 新增課程</summary><form id="cNew" novalidate>'+
       '<label class="fld">課程名稱<input type="text" id="cnName" maxlength="40" placeholder="例如:會考作文衝刺班"></label>'+
-      '<div class="row2"><label class="fld">價格 NT$(0 = 免費報名)<input type="number" id="cnPrice" min="0" step="10" value="0"></label><label class="fld">適合對象<input type="text" id="cnAud" maxlength="80" placeholder="例如:準備會考的國中生"></label></div>'+
+      '<div class="row2"><label class="fld">售價(優惠價)NT$(0 = 免費報名)<input type="number" id="cnPrice" min="0" step="10" value="0"></label><label class="fld">原價 NT$(選填,會顯示劃掉的原價)<input type="number" id="cnList" min="1" step="10" placeholder="沒有就留空"></label></div><div class="row2"><label class="fld">適合對象<input type="text" id="cnAud" maxlength="80" placeholder="例如:準備會考的國中生"></label></div>'+
       '<label class="fld">一句話標語<input type="text" id="cnTag" maxlength="120"></label>'+
       '<label class="fld">課程簡介<textarea id="cnIntro" rows="3" maxlength="1000"></textarea></label>'+
       '<button type="submit" class="btn btn-fill sm">建立課程</button> <span class="mfoot">建立後是「籌備中」。接著在下方新增章節、貼上 YouTube 網址,準備好再把狀態改成「開放報名」。</span></form></details>';
-    body.innerHTML=newC+h+'<p class="mfoot">影片請在 YouTube 設為「不公開」,貼上網址即可。只有報名的學生(或標為試看的章節)能取得影片代碼。章節都可以刪除;自己新增的課程可以整門刪除,網站內建的課程不能刪除,不想開放時把狀態改成「籌備中」。</p>';
+    var gone=(cr.data||[]).filter(function(c){return c.status==='removed'});
+    body.innerHTML=newC+h+(gone.length?'<details class="addbox" id="cGone"><summary>已刪除的課程('+gone.length+')</summary><ul class="mlist">'+gone.map(function(c){return '<li><span><b>'+esc(c.name)+'</b></span><button type="button" class="btn btn-line sm" data-crest="'+esc(c.id)+'">還原</button></li>'}).join('')+'</ul></details>':'')+'<p class="mfoot">影片請在 YouTube 設為「不公開」,貼上網址即可。只有報名的學生(或標為試看的章節)能取得影片代碼。章節都可以刪除;「刪除課程」後前台就看不到這門課(已報名學生的紀錄會保留),可以在下方「已刪除的課程」還原。</p>';
     $('#cNew',body).addEventListener('submit',async function(ev){
       ev.preventDefault();
       var name=$('#cnName').value.trim(),price=parseInt($('#cnPrice').value,10);
       if(!name){toast('請輸入課程名稱');return}
       if(!(price>=0)){toast('請輸入正確的價格');return}
+      var clv=$('#cnList').value.trim(),clp=clv===''?null:parseInt(clv,10);
+      if(clp!==null&&!(clp>price)){toast('原價要比售價高,或留空');return}
       var mx=(cr.data||[]).reduce(function(m,x){return Math.max(m,x.sort||0)},0);
-      var row={id:'c'+Date.now().toString(36),name:name,price:price,status:'draft',sort:mx+1,intro:$('#cnIntro').value.trim()||null,tagline:$('#cnTag').value.trim()||null,audience:$('#cnAud').value.trim()||null};
+      var row={id:'c'+Date.now().toString(36),name:name,price:price,list_price:clp,status:'draft',sort:mx+1,intro:$('#cnIntro').value.trim()||null,tagline:$('#cnTag').value.trim()||null,audience:$('#cnAud').value.trim()||null};
       var ins=await sb.from('courses').insert(row);
       if(ins.error){toast('新增失敗:'+niceErr(ins.error));return}
       PUB.courses[row.id]=row;addDynCourse(row);
@@ -2396,7 +2507,10 @@ function initAdmin(){
     $$('[data-csave]',body).forEach(function(b){b.addEventListener('click',async function(){
       var box=b.closest('[data-crow]'),price=parseInt($('[data-f=price]',box).value,10);
       if(!(price>=0)){toast('請輸入正確的價格');return}
-      var u=await sb.from('courses').update({status:$('[data-f=status]',box).value,price:price}).eq('id',b.getAttribute('data-csave'));
+      var clv=$('[data-f=lprice]',box).value.trim(),clp=clv===''?null:parseInt(clv,10);
+      if(clp!==null&&!(clp>price)){toast('原價要比售價高,或留空');return}
+      var u=await sb.from('courses').update({status:$('[data-f=status]',box).value,price:price,list_price:clp}).eq('id',b.getAttribute('data-csave'));
+      if(!u.error&&PUB.courses[b.getAttribute('data-csave')]){var pc=PUB.courses[b.getAttribute('data-csave')];pc.price=price;pc.list_price=clp}
       toast(u.error?'儲存失敗:'+niceErr(u.error):'已儲存課程設定');
     })});
     $$('[data-chsave]',body).forEach(function(b){b.addEventListener('click',async function(){
@@ -2431,17 +2545,31 @@ function initAdmin(){
       if(!b.classList.contains('arm')){
         var en=await sb.from('enrollments').select('user_id',{count:'exact',head:true}).eq('course_id',id);
         var n=(en&&en.count)||0;
-        armDel(b,'刪除課程','再按一次確認刪除課程「'+(c0.name||id)+'」(含全部章節'+(n?',且 '+n+' 位學生的報名會一起消失':'')+')');return;
+        var dyn0=!!(byId(GW.courses,id)||{}).dyn;
+        armDel(b,'刪除課程',dyn0?'再按一次確認刪除課程「'+(c0.name||id)+'」(含全部章節'+(n?',且 '+n+' 位學生的報名會一起消失':'')+')':'再按一次確認刪除課程「'+(c0.name||id)+'」(前台不再顯示'+(n?',已報名的 '+n+' 位學生紀錄會保留':'')+',之後可還原)');return;
       }
       clearTimeout(b._t);b.disabled=true;
-      var d=await sb.from('courses').delete().eq('id',id).select('id');
+      var isDynC=!!(byId(GW.courses,id)||{}).dyn,d;
+      if(isDynC)d=await sb.from('courses').delete().eq('id',id).select('id');
+      if(!isDynC||(d.error&&d.error.code==='23503')){
+        var mk=await sb.from('courses').update({status:'removed'}).eq('id',id);
+        if(mk.error){b.disabled=false;b.classList.remove('arm');b.textContent='刪除課程';toast('刪除失敗:'+niceErr(mk.error));return}
+        if(PUB.courses[id])PUB.courses[id].status='removed';
+        toast('已刪除課程「'+(c0.name||id)+'」。前台不會再顯示,需要時可在下方「已刪除的課程」還原');TABS.c(body);return;
+      }
       if(d.error||!d.data||!d.data.length){
         b.disabled=false;b.classList.remove('arm');b.textContent='刪除課程';
-        toast(d.error&&d.error.code==='23503'?'這門課已經有訂單紀錄,不能刪除。請把狀態改回「籌備中」,前台就不會開放報名。':'刪除失敗:'+(d.error?niceErr(d.error):'請重新整理後再試'));return;
+        toast('刪除失敗:'+(d.error?niceErr(d.error):'請重新整理後再試'));return;
       }
       if(c0.cover_path){try{await sb.storage.from('product-media').remove([c0.cover_path])}catch(_){}}
       delete PUB.courses[id];var gi=GW.courses.map(function(x){return x.id}).indexOf(id);if(gi>=0)GW.courses.splice(gi,1);
       toast('已刪除課程');TABS.c(body);
+    })});
+    $$('[data-crest]',body).forEach(function(b){b.addEventListener('click',async function(){
+      b.disabled=true;var id=b.getAttribute('data-crest'),u=await sb.from('courses').update({status:'draft'}).eq('id',id);
+      if(u.error){b.disabled=false;toast('還原失敗:'+niceErr(u.error));return}
+      if(PUB.courses[id])PUB.courses[id].status='draft';
+      toast('已還原,狀態是「籌備中」。確認內容後再改成「開放報名」');TABS.c(body);
     })});
     $$('[data-chadd]',body).forEach(function(b){b.addEventListener('click',async function(){
       var cid=b.getAttribute('data-chadd'),mx=(chr.data||[]).filter(function(x){return x.course_id===cid}).reduce(function(m,x){return Math.max(m,x.position)},-1);

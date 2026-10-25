@@ -951,6 +951,14 @@ img.sc.ir{position:absolute;inset:0;width:100%;height:100%}
 /* 作文:分數、範本、新批改提示 */
 .scorebox{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
 .scorebox span{font-size:13px;color:var(--text-soft);letter-spacing:.08em}
+.scorebox.sbx{align-items:flex-start}
+.scorebox .sbl{display:flex;flex-direction:column;gap:3px}
+.scorebox .sbr{display:flex;align-items:baseline;gap:10px}
+.scorebox .sbr em{font-style:normal;font-size:14px;color:var(--text-soft);min-width:4.5em}
+.scorebox .sbr b{font-size:22px}
+.scorebox .sbr.sub{padding-left:1.2em}
+.scorebox .sbr.sub em{font-size:13px}
+.scorebox .sbr.sub b{font-size:16px;color:var(--text)}
 .scorebox b{font-family:var(--font-serif);font-size:26px;letter-spacing:.02em;color:var(--bronze-text)}
 .newpill{display:inline-block;font-style:normal;font-size:12px;line-height:1;padding:3px 8px;border-radius:999px;background:var(--seal,#b5382a);color:#fff;margin-right:6px;vertical-align:middle;letter-spacing:.04em}
 .mtabs .newpill{margin:0 0 0 4px;padding:3px 7px}
@@ -1294,8 +1302,9 @@ dialog.lbx.single .lbx-n{display:none}
 /* 全站自訂下拉清單:選取=紅底白字,滑鼠移到=淺紅底深字 */
 ul.csel{position:fixed;z-index:2147483000;margin:0;padding:4px;list-style:none;overflow:auto;background:var(--card);color:var(--text);border:1px solid color-mix(in srgb,var(--text) 22%,transparent);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.22);font:inherit;font-size:15px}
 ul.csel li{padding:8px 12px;border-radius:7px;cursor:pointer;white-space:nowrap;min-height:1.2em}
-ul.csel li.hi{background:color-mix(in srgb,#B03A2E 16%,var(--card));color:var(--text)}
-ul.csel li.on{background:#B03A2E;color:#fff;font-weight:700}
+ul.csel li.hi{background:#B03A2E;color:#fff}
+ul.csel li.on{font-weight:700}
+ul.csel li.on:not(.hi){color:#B03A2E}
 ul.csel li.dis{opacity:.45;cursor:default}
 
 /* 後台課程:收合/展開、搭配教材勾選 */
@@ -1389,3 +1398,12 @@ button.payb:hover{filter:brightness(.95);text-decoration:underline}
 .edel{font-size:12.5px;color:var(--text-soft)}
 .edel.arm{color:var(--seal);font-weight:500}
 .edelmsg{font-size:12.5px;color:var(--text-soft)}
+
+.rowdel.arm{background:#B03A2E;color:#fff;border-color:#B03A2E}
+.rowdel{margin-left:4px}
+
+s.lprice{color:var(--text-soft);font-weight:400;font-size:.82em;margin-right:.45em;text-decoration:line-through;text-decoration-thickness:1.5px}
+.cprice s.lprice{font-size:.9em}
+.gonenote{margin:0 0 12px;padding:10px 14px;border-radius:10px;background:color-mix(in srgb,#B03A2E 10%,var(--card));color:var(--text);font-weight:700}
+.tbox{margin-bottom:18px}
+.tlist{margin-bottom:6px}
