@@ -1409,3 +1409,9 @@ s.lprice{color:var(--text-soft);font-weight:400;font-size:.82em;margin-right:.45
 .tlist{margin-bottom:6px}
 
 .sline{margin:4px 0 8px}.sline p{margin:2px 0;font-size:15px;color:var(--bronze-text);font-weight:600;letter-spacing:.02em}
+
+.reslv{margin-top:36px}.reslv:first-child{margin-top:6px}
+.reslv h2{font-family:var(--font-serif);font-weight:900;font-size:clamp(20px,2.6vw,25px);letter-spacing:.08em;margin-bottom:14px;padding-left:12px;border-left:3px solid var(--bronze-text)}
+.resnone{font-size:14px;color:var(--text-soft);padding:14px 4px}
+.rtab input[type=text],.rtab input:not([type]),.rtab input[type=number],.rtab select{font:inherit;font-size:13.5px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)}
+.rtab td{vertical-align:top}
