@@ -1291,7 +1291,7 @@ dialog.lbx::backdrop{background:rgba(0,0,0,.6)}
 .lbx-next{right:max(8px,env(safe-area-inset-right,0px))}
 dialog.lbx.single .lbx-n{display:none}
 
-/* 後台自訂下拉清單:選取=紅底白字,滑鼠移到=淺紅底深字 */
+/* 全站自訂下拉清單:選取=紅底白字,滑鼠移到=淺紅底深字 */
 ul.csel{position:fixed;z-index:2147483000;margin:0;padding:4px;list-style:none;overflow:auto;background:var(--card);color:var(--text);border:1px solid color-mix(in srgb,var(--text) 22%,transparent);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.22);font:inherit;font-size:15px}
 ul.csel li{padding:8px 12px;border-radius:7px;cursor:pointer;white-space:nowrap;min-height:1.2em}
 ul.csel li.hi{background:color-mix(in srgb,#B03A2E 16%,var(--card));color:var(--text)}
@@ -1380,3 +1380,12 @@ button.payb:hover{filter:brightness(.95);text-decoration:underline}
 .scoreGrp .sg{min-width:3.6em;padding-bottom:10px;font-weight:500}
 .scoreGrp small{color:var(--text-soft);font-size:12.5px}
 .gprompt{margin-bottom:8px}
+.sgrp{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}
+.sgh{font-size:14px;color:var(--bronze-text);letter-spacing:.06em}
+.sgt{margin:0 0 6px;font-size:14px;color:var(--text-soft)}
+.sgt b{color:var(--text);font-size:16px}
+.scoreGrp .sg{min-width:4.8em}
+.edelrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
+.edel{font-size:12.5px;color:var(--text-soft)}
+.edel.arm{color:var(--seal);font-weight:500}
+.edelmsg{font-size:12.5px;color:var(--text-soft)}

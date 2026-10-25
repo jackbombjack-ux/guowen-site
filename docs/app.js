@@ -315,9 +315,8 @@ $$('dialog').forEach(function(d){
   d.addEventListener('click',function(e){if(e.target===d)closeDlg(d)});
   $$('[data-close]',d).forEach(function(b){b.addEventListener('click',function(){closeDlg(d)})});
 });
-/* ---------- 後台下拉選單:自訂清單(原生選單在 Windows 的滑鼠移到的項目會變白底白字、紅色又留在別格) ---------- */
+/* ---------- 全站下拉選單:自訂清單(原生選單在 Windows 的滑鼠移到的項目會變白底白字、紅色又留在別格) ---------- */
 (function(){
-  if(!/admin(\.html)?$/.test(location.pathname)) return;
   try{ if(window.matchMedia&&matchMedia('(pointer:coarse)').matches) return; }catch(e){}
   var pop=null,cur=null,hi=-1;
   function lis(){return pop?pop.querySelectorAll('li'):[]}
@@ -1376,14 +1375,20 @@ function transcribeEssay(id,say){
 var TX_NOTE={vision:'由 Google 文字辨識自動轉出,可能有誤字,以照片為準。',tesseract:'由瀏覽器簡易辨識轉出,錯字會比較多,以照片為準,老師會再校正。',manual:'老師已校正。'};
 var UNSEEN=0;
 async function fetchMyEssays(){
-  var r=await sb.from('essays').select('id,title,grade,status,feedback,created_at,graded_at,score,score_max,score_info,score_info_max,score_emo,score_emo_max,student_seen_at,transcript,transcript_status,transcript_engine,essay_files(path,kind,page_no)').eq('student_id',U.id).order('created_at',{ascending:false});
+  var r=await sb.from('essays').select('id,title,grade,status,feedback,created_at,graded_at,score,score_max,score_info,score_info_max,score_info1,score_info1_max,score_info2,score_info2_max,score_emo,score_emo_max,student_seen_at,transcript,transcript_status,transcript_engine,essay_files(path,kind,page_no)').eq('student_id',U.id).order('created_at',{ascending:false});
   return r.data||[];
 }
 function scoreParts(e){return !!(e&&((e.score_info!=null&&e.score_info_max!=null)||(e.score_emo!=null&&e.score_emo_max!=null)))}
-function scoreTx(e){
+function scoreTx(e,detail){
   if(!e)return '';
   if(scoreParts(e)){var P=[];
-    if(e.score_info!=null&&e.score_info_max!=null)P.push('知性題 '+(+e.score_info)+' / '+(+e.score_info_max));
+    if(e.score_info!=null&&e.score_info_max!=null){
+      var dt='';
+      if(detail){var D=[];
+        if(e.score_info1!=null&&e.score_info1_max!=null)D.push('第一小題 '+(+e.score_info1)+' / '+(+e.score_info1_max));
+        if(e.score_info2!=null&&e.score_info2_max!=null)D.push('第二小題 '+(+e.score_info2)+' / '+(+e.score_info2_max));
+        if(D.length>1)dt='('+D.join('、')+')'}
+      P.push('知性題 '+(+e.score_info)+' / '+(+e.score_info_max)+dt)}
     if(e.score_emo!=null&&e.score_emo_max!=null)P.push('情意題 '+(+e.score_emo)+' / '+(+e.score_emo_max));
     return P.join('・')}
   return e.score!=null&&e.score_max!=null?(+e.score)+' / '+(+e.score_max):''}
@@ -1427,7 +1432,29 @@ function initEssay(){
     if(es.some(function(x){return x.status==='graded'&&!x.student_seen_at})){sb.rpc('mark_essays_seen').then(function(){UNSEEN=0})}
     box.innerHTML=es.length?es.map(function(e){var n=e.essay_files.filter(function(f){return f.kind==='submission'}).length;
       var fb=e.status==='graded'?'<div class="fbk"><b>老師評語</b><p>'+esc(e.feedback||'(老師已批改,沒有文字評語)').replace(/\n/g,'<br>')+'</p>'+e.essay_files.filter(function(f){return f.kind==='feedback'&&sm[f.path]}).sort(function(a,b){return a.page_no-b.page_no}).map(function(f){return '<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="老師批改第 '+f.page_no+' 頁" loading="lazy"></a>'}).join('')+'</div>':'';
-      return '<li class="col"><div class="l1"><span>'+esc(e.title)+'('+esc(e.grade||'')+'・'+n+' 張・'+dateShort(e.created_at)+')</span><em>'+(e.status==='graded'&&!e.student_seen_at?'<span class="newpill">新批改</span>':'')+STATUS_ES[e.status]+(scoreTx(e)?'・'+scoreTx(e)+(scoreParts(e)?'':' 分'):'')+'</em></div>'+fb+'</li>'}).join(''):'<li class="none">還沒有上傳紀錄</li>';
+      return '<li class="col"><div class="l1"><span>'+esc(e.title)+'('+esc(e.grade||'')+'・'+n+' 張・'+dateShort(e.created_at)+')</span><em>'+(e.status==='graded'&&!e.student_seen_at?'<span class="newpill">新批改</span>':'')+STATUS_ES[e.status]+(scoreTx(e)?'・'+scoreTx(e)+(scoreParts(e)?'':' 分'):'')+'</em></div>'+fb+'<div class="edelrow"><button type="button" class="more edel" data-edel="'+esc(e.id)+'" data-st="'+e.status+'" data-ti="'+esc(e.title)+'">刪除這篇紀錄</button><span class="edelmsg" role="status"></span></div></li>'}).join(''):'<li class="none">還沒有上傳紀錄</li>';
+    $$('[data-edel]',box).forEach(function(b){
+      var t=null;
+      b.addEventListener('click',async function(){
+        var id=b.getAttribute('data-edel'),st=b.getAttribute('data-st'),msg=b.parentNode.querySelector('.edelmsg');
+        if(!b.classList.contains('arm')){
+          b.classList.add('arm');b.textContent='再按一次,確定刪除';
+          msg.textContent=st==='graded'?'刪除後,老師的評語、分數與批改照片都會一起消失,無法復原。':'這篇還沒批改,刪除後會退還 1 次批改次數。';
+          clearTimeout(t);t=setTimeout(function(){b.classList.remove('arm');b.textContent='刪除這篇紀錄';msg.textContent=''},7000);return;
+        }
+        clearTimeout(t);b.disabled=true;b.textContent='刪除中…';
+        try{
+          var fr=await sb.from('essay_files').select('path').eq('essay_id',id);
+          var ps=((fr&&fr.data)||[]).map(function(x){return x.path});
+          if(ps.length){var rm=await sb.storage.from('essays').remove(ps);if(rm&&rm.error)throw rm.error}
+          var dr=await sb.from('essays').delete().eq('id',id).select('id');
+          if(dr.error)throw dr.error;
+          if(!dr.data||!dr.data.length)throw new Error('沒有刪除成功,請重新整理後再試');
+          toast('已刪除「'+b.getAttribute('data-ti')+'」');
+          await refresh();
+        }catch(ex){b.disabled=false;b.classList.remove('arm');b.textContent='刪除這篇紀錄';msg.textContent='刪除失敗:'+niceErr(ex)}
+      });
+    });
   }
   function draw(){
     if(!ready||!loaded){w.hidden=false;up.hidden=true;w.innerHTML='<p class="lead">載入中…</p>';listMine();return}
@@ -1538,7 +1565,6 @@ function initEssay(){
       go.disabled=true;go.textContent='上傳中…';err.textContent='';
       try{
         var newId=await submitEssay({student_id:U.id,created_by:U.id,source:'student',title:t,grade:$('#upGrade').value,note:$('#upNote').value.trim()||null,status:'pending',purchase_id:pu.id,pay_code:code},upFiles,null,pFiles);
-        transcribeEssay(newId);
         var n=upFiles.length;clearThumbs();
         try{await load()}catch(_){}
         var np=MYP.filter(function(x){return x.id===pu.id})[0],rest=np?left(np):0;
@@ -1721,15 +1747,13 @@ function initMember(){
       var sm=await signedMap(fpaths);if(my!==rendering)return;
       if(es.some(function(x){return x.status==='graded'&&!x.student_seen_at})){sb.rpc('mark_essays_seen').then(function(){UNSEEN=0})}
       body='<h2>我的作文</h2><ul class="mlist">'+(es.map(function(e){
-        var fb=e.status==='graded'?'<div class="fbk">'+(scoreTx(e)?'<div class="scorebox"><span>分數</span><b>'+esc(scoreTx(e))+'</b></div>':'')+'<b>老師評語</b><p>'+esc(e.feedback||'(老師已批改,沒有文字評語)').replace(/\n/g,'<br>')+'</p>'+e.essay_files.filter(function(f){return f.kind==='feedback'&&sm[f.path]}).sort(function(a,b){return a.page_no-b.page_no}).map(function(f){return '<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="老師批改照片" loading="lazy"></a>'}).join('')+'</div>':'';
+        var fb=e.status==='graded'?'<div class="fbk">'+(scoreTx(e)?'<div class="scorebox"><span>分數</span><b>'+esc(scoreTx(e,true))+'</b></div>':'')+'<b>老師評語</b><p>'+esc(e.feedback||'(老師已批改,沒有文字評語)').replace(/\n/g,'<br>')+'</p>'+e.essay_files.filter(function(f){return f.kind==='feedback'&&sm[f.path]}).sort(function(a,b){return a.page_no-b.page_no}).map(function(f){return '<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="老師批改照片" loading="lazy"></a>'}).join('')+'</div>':'';
         var subs=e.essay_files.filter(function(f){return f.kind==='submission'}).sort(function(a,b){return a.page_no-b.page_no});
         var n=subs.length;
         var imgs=subs.filter(function(f){return sm[f.path]}).map(function(f,i){return '<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="作文第 '+(i+1)+' 頁" loading="lazy"></a>'}).join('');
-        var tx;
+        var tx='';
         if(e.transcript_status==='done'&&e.transcript)tx='<b>作文文字</b><span class="tnote">'+esc(TX_NOTE[e.transcript_engine]||TX_NOTE.vision)+'</span><div class="ttext">'+esc(e.transcript).replace(/\n/g,'<br>')+'</div>';
-        else if(e.transcript_status==='pending')tx='<b>作文文字</b><p class="tnote">辨識中,請稍後切換分頁再看。</p>';
-        else tx='<b>作文文字</b><p class="tnote">尚未辨識。</p><button type="button" class="btn btn-line sm" data-retx="'+e.id+'">自動辨識</button>';
-        return '<li class="col"><div class="l1"><span>'+esc(e.title)+'('+esc(e.grade||'')+'・'+n+' 張・'+dateShort(e.created_at)+')</span><em>'+(e.status==='graded'&&!e.student_seen_at?'<span class="newpill">新批改</span>':'')+STATUS_ES[e.status]+'</em></div><div class="ecols"><div class="eimgs">'+imgs+'</div><div class="etext">'+tx+'</div></div>'+fb+'</li>'}).join('')||'<li class="none">尚未上傳作文。<a href="essay.html" style="text-decoration:underline;margin-left:6px">前往作文批改</a></li>')+'</ul>';
+        return '<li class="col"><div class="l1"><span>'+esc(e.title)+'('+esc(e.grade||'')+'・'+n+' 張・'+dateShort(e.created_at)+')</span><em>'+(e.status==='graded'&&!e.student_seen_at?'<span class="newpill">新批改</span>':'')+STATUS_ES[e.status]+'</em></div>'+(tx?'<div class="ecols"><div class="eimgs">'+imgs+'</div><div class="etext">'+tx+'</div></div>':'<div class="eimgs">'+imgs+'</div>')+fb+'</li>'}).join('')||'<li class="none">尚未上傳作文。<a href="essay.html" style="text-decoration:underline;margin-left:6px">前往作文批改</a></li>')+'</ul>';
     }else if(tab==='r'){
       var rs=Object.keys(CLAIMED).map(function(id){var r=PUB.resources[id];return r?'<li><span>'+esc(r.name)+'</span><em><button type="button" class="more" data-dl="'+esc(id)+'">下載</button></em></li>':''}).join('')||'<li class="none">尚未領取資源。<a href="resources.html" style="text-decoration:underline;margin-left:6px">免費資源</a></li>';
       body='<h2>我的資源</h2><ul class="mlist">'+rs+'</ul>';
@@ -1756,11 +1780,6 @@ function initMember(){
       if(!rr||!rr.storage_path){toast('檔案還在準備中');return}
       var s=await sb.storage.from('resources').createSignedUrl(rr.storage_path,120);
       if(s.data)window.open(s.data.signedUrl,'_blank','noopener');else toast('下載失敗,請稍後再試');
-    })});
-    $$('[data-retx]',app).forEach(function(b){b.addEventListener('click',async function(){
-      b.disabled=true;b.textContent='辨識中…';
-      var ok=await transcribeEssay(b.getAttribute('data-retx'),function(m){b.textContent=m});
-      toast(ok?'辨識完成':'這張照片無法自動辨識,老師會直接看照片批改');render();
     })});
     var lo=$('#logoutBtn');if(lo)lo.addEventListener('click',signOut);
     var ta=$('#tourAgain');if(ta)ta.addEventListener('click',function(){TOUR.start()});
@@ -1841,7 +1860,7 @@ function initAdmin(){
   /* --- 作文 --- */
   TABS.e=async function(body){
     await loadNames();
-    var r=await sb.from('essays').select('id,student_id,source,source_note,title,grade,note,status,feedback,created_at,score,score_max,score_info,score_info_max,score_emo,score_emo_max,transcript,transcript_status,transcript_engine,purchase_id,pay_code').order('status',{ascending:false}).order('created_at',{ascending:false}).limit(150);
+    var r=await sb.from('essays').select('id,student_id,source,source_note,title,grade,note,status,feedback,created_at,score,score_max,score_info,score_info_max,score_info1,score_info1_max,score_info2,score_info2_max,score_emo,score_emo_max,transcript,transcript_status,transcript_engine,purchase_id,pay_code').order('status',{ascending:false}).order('created_at',{ascending:false}).limit(150);
     var rows=r.data||[];
     var pids=rows.map(function(e){return e.purchase_id}).filter(Boolean),PM={};
     if(pids.length){var pq=await sb.from('essay_purchases').select('id,plan_name,level,status,credits_used,credits_total').in('id',pids);(pq.data||[]).forEach(function(x){PM[x.id]=x})}
@@ -1885,7 +1904,6 @@ function initAdmin(){
         go.disabled=true;go.textContent='上傳中…';
         try{
           var tId=await submitEssay({student_id:null,created_by:U.id,source:'teacher',source_note:$('#tWho').value.trim()||null,title:t,grade:$('#tGrade').value,status:'pending'},tFiles);
-          transcribeEssay(tId);
           var n=tFiles.length;clearT();tf.who='';tf.title='';tf.open=false;toast('已加入「'+t+'」共 '+n+' 張,列在待批改');render();
         }catch(ex){er.textContent='上傳失敗:'+niceErr(ex);go.disabled=false;go.textContent='加入待批改'}
       });
@@ -1909,17 +1927,19 @@ function initAdmin(){
     try{var tr=await sb.from('feedback_templates').select('id,label,body,sort_order').order('sort_order');TPL=tr.data||[]}catch(_){}
     var lastMax='';try{lastMax=localStorage.getItem('gw-score-max')||''}catch(_){}
     var maxV=e.score_max!=null?e.score_max:(lastMax||60);
-    var lastI='',lastE='';try{lastI=localStorage.getItem('gw-score-max-info')||'';lastE=localStorage.getItem('gw-score-max-emo')||''}catch(_){}
+    var lsg=function(k){try{return localStorage.getItem(k)||''}catch(_){return ''}};
+    var lastI1=lsg('gw-score-max-i1'),lastI2=lsg('gw-score-max-i2'),lastE=lsg('gw-score-max-emo');
+    var i1v=e.score_info1,i1m=e.score_info1_max,i2v=e.score_info2,i2m=e.score_info2_max;
+    if(i1v==null&&i2v==null&&e.score_info!=null){i1v=e.score_info;i1m=e.score_info_max}
     function sRow(lab,idS,idM,sv,mv,ph){return '<div class="scoreRow"><b class="sg">'+lab+'</b><label for="'+idS+'">分數<input id="'+idS+'" type="number" inputmode="decimal" min="0" max="100" step="0.5" value="'+(sv!=null?sv:'')+'" placeholder="'+ph+'"></label><span class="sl">/</span><label for="'+idM+'">滿分<input id="'+idM+'" type="number" inputmode="decimal" min="1" max="100" step="0.5" value="'+mv+'"></label></div>'}
     var scoreHtml=isSen?
-      '<div class="scoreGrp">'+sRow('知性題','gScoreI','gMaxI',e.score_info,e.score_info_max!=null?e.score_info_max:(lastI||27),'例如 20')+sRow('情意題','gScoreE','gMaxE',e.score_emo,e.score_emo_max!=null?e.score_emo_max:(lastE||27),'例如 22')+'<small>不打分數就留空(兩項可以只填其中一項)</small></div>':
+      '<div class="scoreGrp"><div class="sgrp"><b class="sgh">知性題</b>'+sRow('第一小題','gScoreI1','gMaxI1',i1v,i1m!=null?i1m:(lastI1||4),'例如 4')+sRow('第二小題','gScoreI2','gMaxI2',i2v,i2m!=null?i2m:(lastI2||21),'例如 18')+'<p class="sgt">知性題總分:<b id="gSumI">—</b>(自動加總)</p></div>'+sRow('情意題','gScoreE','gMaxE',e.score_emo,e.score_emo_max!=null?e.score_emo_max:(lastE||25),'例如 22')+'<small>不打分數就留空(第一、第二小題也可以只填其中一題)</small></div>':
       '<div class="scoreRow"><label for="gScore">分數<input id="gScore" type="number" inputmode="decimal" min="0" max="100" step="0.5" value="'+(e.score!=null?e.score:'')+'" placeholder="例如 45"></label><span class="sl">/</span><label for="gMax">滿分<input id="gMax" type="number" inputmode="decimal" min="1" max="100" step="0.5" value="'+maxV+'"></label><small>不打分數就留空</small></div>';
     openModal('<h3 id="mTitle">'+esc(e.title)+'</h3><p class="lead">'+esc(e.source==='teacher'?(e.source_note||'老師自行上傳'):nm(e.student_id))+'・'+esc(e.grade||'')+'・'+fmtDate(e.created_at)+'</p>'+
       (e.note?'<p class="gnote"><b>學生留言:</b>'+esc(e.note)+'</p>':'')+
       (prs.length?'<p class="gnote"><b>作文題目:</b></p><div class="gimgs gprompt">'+prs.map(function(f,i){return sm[f.path]?'<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="題目第 '+(i+1)+' 張"></a>':''}).join('')+'</div><p class="gnote"><b>學生作文:</b></p>':'')+
       '<div class="gimgs">'+subs.map(function(f,i){return sm[f.path]?'<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="作文第 '+(i+1)+' 頁"></a>':''}).join('')+'</div>'+
       (fbs.length?'<p class="gnote"><b>已上傳的批改照片:</b></p><div class="gimgs">'+fbs.map(function(f){return sm[f.path]?'<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="批改照片"></a>':''}).join('')+'</div>':'')+
-      '<label class="fld" for="gTx">作文文字(自動辨識,可直接修改;學生也看得到)<textarea id="gTx" rows="8" maxlength="20000" placeholder="'+(e.transcript_status==='pending'?'辨識中…請稍後按「重新辨識」更新':'尚未辨識')+'">'+esc(e.transcript||'')+'</textarea></label><button type="button" class="btn btn-line sm" id="gRetx" style="margin:-4px 0 12px">重新辨識</button>'+
       scoreHtml+
       '<div class="fld"><div class="tplHead"><span>評語範本(點一下插入)</span><button type="button" class="more" id="tplMng">管理</button></div><div class="tplRow" id="tplRow"></div></div>'+
       '<label class="fld" for="gFb">文字評語<textarea id="gFb" rows="6" maxlength="4000" placeholder="寫給學生的評語與建議">'+esc(e.feedback||'')+'</textarea></label>'+
@@ -1947,6 +1967,14 @@ function initAdmin(){
           $$('[data-tdel]',row).forEach(function(b){b.addEventListener('click',async function(){var id2=b.getAttribute('data-tdel');var dr=await sb.from('feedback_templates').delete().eq('id',+id2);if(dr.error){$('#gErr').textContent='刪除範本失敗:'+niceErr(dr.error);return}TPL=TPL.filter(function(x){return String(x.id)!==id2});drawTpl()})});
         }
         drawTpl();
+        if(isSen){
+          var sumI=function(){
+            var t=0,m=0,any=false;
+            [['#gScoreI1','#gMaxI1'],['#gScoreI2','#gMaxI2']].forEach(function(z){var a=$(z[0]).value.trim(),b=$(z[1]).value.trim();if(a!==''&&isFinite(+a)){any=true;t+=+a;m+=(isFinite(+b)&&b!==''?+b:0)}});
+            $('#gSumI').textContent=any?(Math.round(t*10)/10)+' / '+(Math.round(m*10)/10):'—';
+          };
+          ['#gScoreI1','#gMaxI1','#gScoreI2','#gMaxI2'].forEach(function(q){$(q).addEventListener('input',sumI)});sumI();
+        }
         $('#tplMng').addEventListener('click',function(){tplEdit=!tplEdit;this.textContent=tplEdit?'完成':'管理';drawTpl()});
         $('#tplAdd').addEventListener('click',function(){var er=$('#gErr');if(!$('#gFb').value.trim()){er.textContent='先寫好評語,才能存成範本。';return}er.textContent='';$('#tplForm').hidden=false;$('#tplLabel').focus()});
         $('#tplOk').addEventListener('click',async function(){
@@ -1957,13 +1985,6 @@ function initAdmin(){
           if(ins.error){er.textContent='存範本失敗:'+niceErr(ins.error);return}
           var row0=(ins.data&&ins.data[0])||null;if(row0)TPL.push(row0);
           $('#tplLabel').value='';$('#tplForm').hidden=true;er.textContent='';drawTpl();toast('已存成範本');
-        });
-        $('#gRetx').addEventListener('click',async function(){
-          var bt=this;bt.disabled=true;bt.textContent='辨識中…';
-          var ok=await transcribeEssay(id,function(m){bt.textContent=m});
-          if(ok){var rr=await sb.from('essays').select('transcript,transcript_engine').eq('id',id).maybeSingle();if(rr.data){$('#gTx').value=rr.data.transcript||'';e.transcript=rr.data.transcript;e.transcript_status='done';e.transcript_engine=rr.data.transcript_engine}}
-          else $('#gErr').textContent='這張照片無法自動辨識(手寫稿紙格線容易造成錯字),請直接看照片批改。';
-          bt.disabled=false;bt.textContent='重新辨識';
         });
         $('#gFile').addEventListener('change',function(){fpick=[];var er=$('#gErr');er.textContent='';Array.prototype.forEach.call(this.files,function(f){var m=checkFile(f,fpick);if(m){er.textContent=m;return}fpick.push(f)})});
         $('#gGo').addEventListener('click',async function(){
@@ -1978,11 +1999,13 @@ function initAdmin(){
             if(n<0||n>m)return {err:pre+'分數要在 0 到滿分之間。'};
             return {n:n,m:m};
           }
-          var scN=null,mxN=null,sI=null,sE=null;
+          var scN=null,mxN=null,sI1=null,sI2=null,sE=null,sI={n:null,m:null};
           if(isSen){
-            sI=rd('#gScoreI','#gMaxI','知性題');if(sI.err){er.textContent=sI.err;return}
+            sI1=rd('#gScoreI1','#gMaxI1','知性題第一小題');if(sI1.err){er.textContent=sI1.err;return}
+            sI2=rd('#gScoreI2','#gMaxI2','知性題第二小題');if(sI2.err){er.textContent=sI2.err;return}
             sE=rd('#gScoreE','#gMaxE','情意題');if(sE.err){er.textContent=sE.err;return}
-            if(sI.n!=null||sE.n!=null){scN=(sI.n||0)+(sE.n||0);mxN=(sI.m||0)+(sE.m||0);if(mxN>100){er.textContent='兩項滿分合計不能超過 100。';return}}
+            if(sI1.n!=null||sI2.n!=null){sI={n:(sI1.n||0)+(sI2.n||0),m:(sI1.m||0)+(sI2.m||0)};if(sI.m>100){er.textContent='知性題兩小題滿分合計不能超過 100。';return}}
+            if(sI.n!=null||sE.n!=null){scN=(sI.n||0)+(sE.n||0);mxN=(sI.m||0)+(sE.m||0);if(mxN>100){er.textContent='知性題與情意題滿分合計不能超過 100。';return}}
           }else{
             var r1=rd('#gScore','#gMax','');if(r1.err){er.textContent=r1.err;return}
             scN=r1.n;mxN=r1.m;
@@ -1998,12 +2021,10 @@ function initAdmin(){
             }
             if(up.length){var ir=await sb.from('essay_files').insert(up.map(function(p,i){return {essay_id:id,path:p,page_no:i+1,kind:'feedback'}}));if(ir.error)throw ir.error}
             var upd={status:'graded',feedback:fb||null,graded_at:new Date().toISOString(),graded_by:U.id,score:scN,score_max:scN==null?null:mxN,student_seen_at:null};
-            if(isSen){upd.score_info=sI.n;upd.score_info_max=sI.n==null?null:sI.m;upd.score_emo=sE.n;upd.score_emo_max=sE.n==null?null:sE.m}
-            var txv=$('#gTx').value.trim();
-            if(txv!==(e.transcript||'').trim()){upd.transcript=txv||null;upd.transcript_status=txv?'done':'none';upd.transcript_engine=txv?'manual':null;upd.transcript_at=new Date().toISOString()}
+            if(isSen){upd.score_info1=sI1.n;upd.score_info1_max=sI1.n==null?null:sI1.m;upd.score_info2=sI2.n;upd.score_info2_max=sI2.n==null?null:sI2.m;upd.score_info=sI.n;upd.score_info_max=sI.n==null?null:sI.m;upd.score_emo=sE.n;upd.score_emo_max=sE.n==null?null:sE.m}
             var ur=await sb.from('essays').update(upd).eq('id',id);
             if(ur.error)throw ur.error;
-            if(isSen){try{if(sI.n!=null)localStorage.setItem('gw-score-max-info',String(sI.m));if(sE.n!=null)localStorage.setItem('gw-score-max-emo',String(sE.m))}catch(_){}}
+            if(isSen){try{if(sI1.n!=null)localStorage.setItem('gw-score-max-i1',String(sI1.m));if(sI2.n!=null)localStorage.setItem('gw-score-max-i2',String(sI2.m));if(sE.n!=null)localStorage.setItem('gw-score-max-emo',String(sE.m))}catch(_){}}
             else if(scN!=null){try{localStorage.setItem('gw-score-max',String(mxN))}catch(_){}}
             var via=[];try{var nr=await callFn('notify-graded',{essay_id:id});if(nr&&nr.pushed>0)via.push('手機推播');if(nr&&nr.email==='sent')via.push('Email')}catch(_){}
             closeDlg(modal);toast(via.length?'已儲存批改,並用'+via.join('和')+'通知學生':'已儲存批改');render();
@@ -2106,7 +2127,7 @@ function initAdmin(){
       '<button type="submit" class="btn btn-fill sm">建立教材</button> <span class="mfoot">建立後先是「未上架」,只有你看得到;補完封面、簡介、目錄,再勾選「上架」並按儲存,前台就會出現。</span></form></details>';
     body.innerHTML=catBox+newForm+'<div class="twrap"><table class="tbl"><thead><tr><th>教材</th><th>售價(NT$)</th><th>類型</th>'+(catOk?'<th>專區</th>':'')+'<th>上架</th><th></th></tr></thead><tbody>'+rows.map(function(p){
       return '<tr data-prow="'+esc(p.id)+'"><td>'+esc(p.name)+'</td><td><input type="number" min="0" step="10" value="'+p.price+'" data-f="price" style="width:90px"></td><td><select data-f="kind"><option value="physical"'+(p.kind==='physical'?' selected':'')+'>實體書(需寄送)</option><option value="digital"'+(p.kind==='digital'?' selected':'')+'>電子檔</option></select></td>'+(catOk?'<td><select data-f="cat">'+catOpts(p.category_id||'')+'</select></td>':'')+'<td><input type="checkbox" data-f="active"'+(p.active?' checked':'')+' aria-label="上架"></td><td class="pact2"><button type="button" class="btn btn-line sm" data-save="'+esc(p.id)+'">儲存</button> <button type="button" class="btn btn-line sm" data-edit="'+esc(p.id)+'" aria-expanded="false">編輯內容與圖片</button>'+((byId(GW.products,p.id)||{}).dyn?' <button type="button" class="btn btn-line sm pdel" data-pdel="'+esc(p.id)+'">刪除</button>':'')+'</td></tr>'+
-        '<tr data-erow="'+esc(p.id)+'" hidden><td colspan="6"></td></tr>'}).join('')+'</tbody></table></div><p class="mfoot">價格會立刻套用到網站與結帳。已付款的舊訂單金額不受影響。「編輯內容與圖片」可以自己換封面、改簡介、特色與目錄,以及上傳內頁圖。</p>';
+        '<tr data-erow="'+esc(p.id)+'" hidden><td colspan="6"></td></tr>'}).join('')+'</tbody></table></div><p class="mfoot">價格會立刻套用到網站與結帳。已付款的舊訂單金額不受影響。「編輯內容與圖片」可以自己換封面、改簡介、特色與目錄,以及上傳內頁圖。自己新增的教材可以按「刪除」;網站內建的教材不能刪除,不想賣時取消「上架」並按儲存。</p>';
     if(catOk){
       var cnf=$('#catNew',body);
       cnf.addEventListener('submit',async function(ev){
@@ -2288,9 +2309,9 @@ function initAdmin(){
     var h='';
     (cr.data||[]).forEach(function(c){
       var chs=(chr.data||[]).filter(function(x){return x.course_id===c.id});
-      h+='<div class="ccfg" data-crow="'+esc(c.id)+'"><div class="ccfg-h"><b>'+esc(c.name)+'</b><label>狀態 <select data-f="status"><option value="draft"'+(c.status==='draft'?' selected':'')+'>籌備中</option><option value="open"'+(c.status==='open'?' selected':'')+'>開放報名</option></select></label><label>價格 NT$ <input type="number" min="0" step="10" data-f="price" value="'+c.price+'" style="width:90px"></label><button type="button" class="btn btn-line sm" data-csave="'+esc(c.id)+'">儲存</button></div><p class="mfoot" style="margin:0 0 8px">價格填 0 代表免費報名。</p>'+
+      h+='<div class="ccfg" data-crow="'+esc(c.id)+'"><div class="ccfg-h"><b>'+esc(c.name)+'</b><label>狀態 <select data-f="status"><option value="draft"'+(c.status==='draft'?' selected':'')+'>籌備中</option><option value="open"'+(c.status==='open'?' selected':'')+'>開放報名</option></select></label><label>價格 NT$ <input type="number" min="0" step="10" data-f="price" value="'+c.price+'" style="width:90px"></label><button type="button" class="btn btn-line sm" data-csave="'+esc(c.id)+'">儲存</button>'+((byId(GW.courses,c.id)||{}).dyn?'<button type="button" class="btn btn-line sm pdel" data-cdel="'+esc(c.id)+'">刪除課程</button>':'')+'</div><p class="mfoot" style="margin:0 0 8px">價格填 0 代表免費報名。</p>'+
         '<div class="twrap"><table class="tbl"><thead><tr><th>#</th><th>章節</th><th>YouTube 網址或影片代碼</th><th>試看</th><th></th></tr></thead><tbody>'+chs.map(function(ch){
-          return '<tr data-ch="'+ch.id+'"><td>'+(ch.position+1)+'</td><td><input data-f="title" value="'+esc(ch.title)+'" maxlength="80"></td><td><input data-f="yt" value="'+esc(vm[ch.id]||'')+'" placeholder="https://youtu.be/…"></td><td><input type="checkbox" data-f="prev"'+(ch.is_preview?' checked':'')+' aria-label="試看"></td><td><button type="button" class="btn btn-line sm" data-chsave="'+ch.id+'">儲存</button></td></tr>'}).join('')+'</tbody></table></div><button type="button" class="btn btn-line sm" data-chadd="'+esc(c.id)+'" style="margin-top:8px">＋ 新增章節</button></div>';
+          return '<tr data-ch="'+ch.id+'"><td>'+(ch.position+1)+'</td><td><input data-f="title" value="'+esc(ch.title)+'" maxlength="80"></td><td><input data-f="yt" value="'+esc(vm[ch.id]||'')+'" placeholder="https://youtu.be/…"></td><td><input type="checkbox" data-f="prev"'+(ch.is_preview?' checked':'')+' aria-label="試看"></td><td><button type="button" class="btn btn-line sm" data-chsave="'+ch.id+'">儲存</button> <button type="button" class="btn btn-line sm pdel" data-chdel="'+ch.id+'">刪除</button></td></tr>'}).join('')+'</tbody></table></div><button type="button" class="btn btn-line sm" data-chadd="'+esc(c.id)+'" style="margin-top:8px">＋ 新增章節</button></div>';
     });
     var newC='<details class="addbox" id="cNewBox"><summary>＋ 新增課程</summary><form id="cNew" novalidate>'+
       '<label class="fld">課程名稱<input type="text" id="cnName" maxlength="40" placeholder="例如:會考作文衝刺班"></label>'+
@@ -2298,7 +2319,7 @@ function initAdmin(){
       '<label class="fld">一句話標語<input type="text" id="cnTag" maxlength="120"></label>'+
       '<label class="fld">課程簡介<textarea id="cnIntro" rows="3" maxlength="1000"></textarea></label>'+
       '<button type="submit" class="btn btn-fill sm">建立課程</button> <span class="mfoot">建立後是「籌備中」。接著在下方新增章節、貼上 YouTube 網址,準備好再把狀態改成「開放報名」。</span></form></details>';
-    body.innerHTML=newC+h+'<p class="mfoot">影片請在 YouTube 設為「不公開」,貼上網址即可。只有報名的學生(或標為試看的章節)能取得影片代碼。</p>';
+    body.innerHTML=newC+h+'<p class="mfoot">影片請在 YouTube 設為「不公開」,貼上網址即可。只有報名的學生(或標為試看的章節)能取得影片代碼。章節都可以刪除;自己新增的課程可以整門刪除,網站內建的課程不能刪除,不想開放時把狀態改成「籌備中」。</p>';
     $('#cNew',body).addEventListener('submit',async function(ev){
       ev.preventDefault();
       var name=$('#cnName').value.trim(),price=parseInt($('#cnPrice').value,10);
@@ -2385,6 +2406,42 @@ function initAdmin(){
       if(u.error){toast('儲存失敗:'+niceErr(u.error));return}
       var v=yid?await sb.from('chapter_videos').upsert({chapter_id:id,youtube_id:yid},{onConflict:'chapter_id'}):await sb.from('chapter_videos').delete().eq('chapter_id',id);
       toast(v.error?'影片儲存失敗:'+niceErr(v.error):'已儲存章節');
+    })});
+    function armDel(b,label,ask){
+      if(!b.classList.contains('arm')){
+        b.classList.add('arm');b.textContent=ask;
+        clearTimeout(b._t);b._t=setTimeout(function(){b.classList.remove('arm');b.textContent=label},6000);return false;
+      }
+      clearTimeout(b._t);return true;
+    }
+    $$('[data-chdel]',body).forEach(function(b){b.addEventListener('click',async function(){
+      if(!armDel(b,'刪除','再按一次確認刪除'))return;
+      var id=+b.getAttribute('data-chdel'),ch0=(chr.data||[]).filter(function(x){return x.id===id})[0];
+      b.disabled=true;
+      var d=await sb.from('course_chapters').delete().eq('id',id).select('id');
+      if(d.error||!d.data||!d.data.length){b.disabled=false;b.classList.remove('arm');b.textContent='刪除';toast('刪除失敗:'+(d.error?niceErr(d.error):'請重新整理後再試'));return}
+      if(ch0){
+        var rest=(chr.data||[]).filter(function(x){return x.course_id===ch0.course_id&&x.id!==id}).sort(function(a,b2){return a.position-b2.position});
+        for(var i=0;i<rest.length;i++){if(rest[i].position!==i){var u=await sb.from('course_chapters').update({position:i}).eq('id',rest[i].id);if(u.error)break}}
+      }
+      toast('已刪除章節');TABS.c(body);
+    })});
+    $$('[data-cdel]',body).forEach(function(b){b.addEventListener('click',async function(){
+      var id=b.getAttribute('data-cdel'),c0=(cr.data||[]).filter(function(x){return x.id===id})[0]||{};
+      if(!b.classList.contains('arm')){
+        var en=await sb.from('enrollments').select('user_id',{count:'exact',head:true}).eq('course_id',id);
+        var n=(en&&en.count)||0;
+        armDel(b,'刪除課程','再按一次確認刪除課程「'+(c0.name||id)+'」(含全部章節'+(n?',且 '+n+' 位學生的報名會一起消失':'')+')');return;
+      }
+      clearTimeout(b._t);b.disabled=true;
+      var d=await sb.from('courses').delete().eq('id',id).select('id');
+      if(d.error||!d.data||!d.data.length){
+        b.disabled=false;b.classList.remove('arm');b.textContent='刪除課程';
+        toast(d.error&&d.error.code==='23503'?'這門課已經有訂單紀錄,不能刪除。請把狀態改回「籌備中」,前台就不會開放報名。':'刪除失敗:'+(d.error?niceErr(d.error):'請重新整理後再試'));return;
+      }
+      if(c0.cover_path){try{await sb.storage.from('product-media').remove([c0.cover_path])}catch(_){}}
+      delete PUB.courses[id];var gi=GW.courses.map(function(x){return x.id}).indexOf(id);if(gi>=0)GW.courses.splice(gi,1);
+      toast('已刪除課程');TABS.c(body);
     })});
     $$('[data-chadd]',body).forEach(function(b){b.addEventListener('click',async function(){
       var cid=b.getAttribute('data-chadd'),mx=(chr.data||[]).filter(function(x){return x.course_id===cid}).reduce(function(m,x){return Math.max(m,x.position)},-1);
