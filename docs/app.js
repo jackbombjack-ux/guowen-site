@@ -1431,6 +1431,18 @@ function scoreBoxHtml(e){
     if(e.score_info2!=null&&e.score_info2_max!=null)h+='<div class="sbr sub"><em>第二小題</em><b>'+(+e.score_info2)+' / '+(+e.score_info2_max)+'</b></div>'}
   if(e.score_emo!=null&&e.score_emo_max!=null)h+='<div class="sbr"><em>情意題</em><b>'+(+e.score_emo)+' / '+(+e.score_emo_max)+'</b></div>';
   return h+'</div></div>'}
+function scoreLinesHtml(e){
+  if(!scoreTx(e))return '';
+  if(!scoreParts(e))return '<div class="sline"><p>分數:'+esc(scoreTx(e))+'</p></div>';
+  var h='<div class="sline">';
+  if(e.score_info!=null&&e.score_info_max!=null){
+    var D=[];
+    if(e.score_info1!=null)D.push('第一小題:'+(+e.score_info1));
+    if(e.score_info2!=null)D.push('第二小題:'+(+e.score_info2));
+    D.push((D.length?'總分':'')+(+e.score_info)+'/'+(+e.score_info_max));
+    h+='<p>知性題:'+D.join(';')+'</p>'}
+  if(e.score_emo!=null&&e.score_emo_max!=null)h+='<p>情意題:'+(+e.score_emo)+'/'+(+e.score_emo_max)+'</p>';
+  return h+'</div>'}
 function dateShort(t){var d=new Date(t);return (d.getMonth()+1)+'/'+d.getDate()}
 
 var ELV={
@@ -1471,7 +1483,7 @@ function initEssay(){
     if(es.some(function(x){return x.status==='graded'&&!x.student_seen_at})){sb.rpc('mark_essays_seen').then(function(){UNSEEN=0})}
     box.innerHTML=es.length?es.map(function(e){var n=e.essay_files.filter(function(f){return f.kind==='submission'}).length;
       var fb=e.status==='graded'?'<div class="fbk"><b>老師評語</b><p>'+esc(e.feedback||'(老師已批改,沒有文字評語)').replace(/\n/g,'<br>')+'</p>'+e.essay_files.filter(function(f){return f.kind==='feedback'&&sm[f.path]}).sort(function(a,b){return a.page_no-b.page_no}).map(function(f){return '<a href="'+sm[f.path]+'" target="_blank" rel="noopener"><img src="'+sm[f.path]+'" alt="老師批改第 '+f.page_no+' 頁" loading="lazy"></a>'}).join('')+'</div>':'';
-      return '<li class="col"><div class="l1"><span>'+esc(e.title)+'('+esc(e.grade||'')+'・'+n+' 張・'+dateShort(e.created_at)+')</span><em>'+(e.status==='graded'&&!e.student_seen_at?'<span class="newpill">新批改</span>':'')+STATUS_ES[e.status]+(scoreTx(e)?'・'+scoreTx(e)+(scoreParts(e)?'':' 分'):'')+'</em></div>'+fb+'<div class="edelrow"><button type="button" class="more edel" data-edel="'+esc(e.id)+'" data-st="'+e.status+'" data-ti="'+esc(e.title)+'">刪除這篇紀錄</button><span class="edelmsg" role="status"></span></div></li>'}).join(''):'<li class="none">還沒有上傳紀錄</li>';
+      return '<li class="col"><div class="l1"><span>'+esc(e.title)+'('+esc(e.grade||'')+'・'+n+' 張・'+dateShort(e.created_at)+')</span><em>'+(e.status==='graded'&&!e.student_seen_at?'<span class="newpill">新批改</span>':'')+STATUS_ES[e.status]+'</em></div>'+(e.status==='graded'?scoreLinesHtml(e):'')+fb+'<div class="edelrow"><button type="button" class="more edel" data-edel="'+esc(e.id)+'" data-st="'+e.status+'" data-ti="'+esc(e.title)+'">刪除這篇紀錄</button><span class="edelmsg" role="status"></span></div></li>'}).join(''):'<li class="none">還沒有上傳紀錄</li>';
     $$('[data-edel]',box).forEach(function(b){
       var t=null;
       b.addEventListener('click',async function(){

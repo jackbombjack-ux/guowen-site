@@ -1407,3 +1407,5 @@ s.lprice{color:var(--text-soft);font-weight:400;font-size:.82em;margin-right:.45
 .gonenote{margin:0 0 12px;padding:10px 14px;border-radius:10px;background:color-mix(in srgb,#B03A2E 10%,var(--card));color:var(--text);font-weight:700}
 .tbox{margin-bottom:18px}
 .tlist{margin-bottom:6px}
+
+.sline{margin:4px 0 8px}.sline p{margin:2px 0;font-size:15px;color:var(--bronze-text);font-weight:600;letter-spacing:.02em}
