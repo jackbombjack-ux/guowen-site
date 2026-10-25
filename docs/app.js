@@ -2988,6 +2988,30 @@ if(statsEl){
 }
 
 
+/* ---------- 同學留言輪播 ---------- */
+(function(){
+  var box=$('#tsti');if(!box)return;
+  var qs=$$('.tq',box),ds=$$('.td',box),cur=0,timer=null,hold=false;
+  if(qs.length<2)return;
+  function go(i){
+    cur=(i+qs.length)%qs.length;
+    qs.forEach(function(q,k){q.classList.toggle('on',k===cur)});
+    ds.forEach(function(d,k){d.classList.toggle('on',k===cur)});
+  }
+  function stop(){if(timer){clearInterval(timer);timer=null}}
+  function start(){stop();if(reduce||hold||document.hidden)return;timer=setInterval(function(){go(cur+1)},6500)}
+  ds.forEach(function(d){d.addEventListener('click',function(){go(+d.getAttribute('data-i'));start()})});
+  box.addEventListener('mouseenter',function(){hold=true;stop()});
+  box.addEventListener('mouseleave',function(){hold=false;start()});
+  box.addEventListener('focusin',function(){hold=true;stop()});
+  box.addEventListener('focusout',function(){hold=false;start()});
+  document.addEventListener('visibilitychange',start);
+  var sx=null;
+  box.addEventListener('touchstart',function(e){sx=e.touches[0].clientX},{passive:true});
+  box.addEventListener('touchend',function(e){if(sx===null)return;var dx=e.changedTouches[0].clientX-sx;sx=null;if(Math.abs(dx)>40){go(cur+(dx<0?1:-1));start()}},{passive:true});
+  start();
+})();
+
 /* ---------- 質感與動態（尊重「減少動態效果」設定） ---------- */
 (function(){
   var reducedFx=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;

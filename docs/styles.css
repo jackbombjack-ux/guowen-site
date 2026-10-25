@@ -1415,3 +1415,26 @@ s.lprice{color:var(--text-soft);font-weight:400;font-size:.82em;margin-right:.45
 .resnone{font-size:14px;color:var(--text-soft);padding:14px 4px}
 .rtab input[type=text],.rtab input:not([type]),.rtab input[type=number],.rtab select{font:inherit;font-size:13.5px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)}
 .rtab td{vertical-align:top}
+
+/* ---------- 同學留言輪播 ---------- */
+.tsti{position:relative;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-sm);padding:26px 26px 20px;max-width:520px;margin-inline:auto;width:100%}
+.tsti::before{content:"“";position:absolute;right:18px;top:-4px;font-family:var(--font-serif);font-size:84px;line-height:1;color:var(--bronze-a);opacity:.55;pointer-events:none}
+.tsti-h{display:flex;align-items:center;gap:8px;font-family:var(--font-serif);font-weight:700;letter-spacing:.12em;color:var(--bronze-text)}
+.tsti-h .ico{width:18px;height:18px}
+.tsti-stage{display:grid;margin-top:14px}
+.tq{grid-area:1/1;margin:0;display:flex;flex-direction:column;justify-content:space-between;gap:16px;opacity:0;visibility:hidden;transform:translateY(6px);transition:opacity .6s ease,transform .6s ease,visibility 0s linear .6s}
+.tq.on{opacity:1;visibility:visible;transform:none;transition:opacity .6s ease,transform .6s ease}
+.tq blockquote{margin:0;font-family:var(--font-kai,var(--font-serif));font-size:clamp(16px,1.9vw,18px);line-height:1.95;color:var(--text)}
+.tq figcaption{font-size:14px;letter-spacing:.08em;color:var(--text-soft)}
+.tq figcaption::before{content:"— "}
+.tsti-dots{display:flex;flex-wrap:wrap;gap:4px;margin-top:14px}
+.td{width:22px;height:22px;border:0;background:none;padding:0;cursor:pointer;display:grid;place-items:center}
+.td::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--line-strong);transition:background .3s,transform .3s}
+.td.on::after{background:var(--bronze-b);transform:scale(1.35)}
+.td:focus-visible{outline:2px solid var(--bronze-b);outline-offset:1px;border-radius:50%}
+@media (prefers-reduced-motion:reduce){.tq,.tq.on{transition:none;transform:none}}
+@media (max-width:560px){
+  .tsti{padding:22px 18px 16px}
+  .hero-in{grid-template-columns:minmax(0,1fr)}
+  .hero h1{font-size:min(calc((100vw - 58px)/7.2),64px)}
+}
