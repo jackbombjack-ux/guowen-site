@@ -1362,3 +1362,21 @@ ul.csel li.dis{opacity:.45;cursor:default}
 button.payb{cursor:pointer;border:0;font:inherit;font-size:12.5px}
 button.payb:hover{filter:brightness(.95);text-decoration:underline}
 .muted{color:var(--text-soft)}
+
+/* v27:已購方案置頂、題目/作文雙上傳區、提示兩行、高中雙分數 */
+.emine{margin:0 0 26px;padding:18px 18px 16px;border:2px solid var(--bronze-b);border-radius:16px;background:color-mix(in srgb,var(--bronze-text) 8%,var(--paper))}
+.emine h3{font-size:20px;color:var(--bronze-text)}
+.emine li{background:var(--paper);border-color:var(--bronze-b)}
+.emine .btn{white-space:nowrap}
+.upz{margin:18px 0 6px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--paper)}
+.upz-t{display:flex;align-items:center;gap:8px;margin:0 0 4px;font-family:var(--font-serif);font-size:17px}
+.upz-t span{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--bronze-text);color:var(--paper);font-size:13px;font-family:inherit}
+.upz-t em{font-style:normal;font-size:12px;color:var(--seal);border:1px solid currentColor;border-radius:99px;padding:1px 8px}
+.upz-d{margin:0 0 10px;font-size:13.5px;color:var(--text-soft)}
+.uptip{display:block;margin:10px 0 2px;padding:9px 12px;border-radius:8px;background:color-mix(in srgb,var(--bronze-text) 10%,var(--paper));border:1px solid color-mix(in srgb,var(--bronze-text) 35%,transparent);font-size:13.5px;line-height:1.7;color:var(--text)}
+.uptip span{display:block}
+.scoreGrp{display:flex;flex-direction:column;gap:2px;margin-bottom:12px}
+.scoreGrp .scoreRow{margin-bottom:8px}
+.scoreGrp .sg{min-width:3.6em;padding-bottom:10px;font-weight:500}
+.scoreGrp small{color:var(--text-soft);font-size:12.5px}
+.gprompt{margin-bottom:8px}
