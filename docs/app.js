@@ -1253,7 +1253,7 @@ function initCart(){
       (needShip&&PUB.pay?'<div class="rcpt"><h3>收件資料</h3><label class="fld" for="rName">收件人<input id="rName" autocomplete="name" maxlength="30" value="'+esc(rc.name||'')+'"></label><label class="fld" for="rPhone">手機<input id="rPhone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" value="'+esc(rc.phone||'')+'"></label><label class="fld" for="rAddr">收件地址<input id="rAddr" autocomplete="street-address" maxlength="120" value="'+esc(rc.address||'')+'"></label></div>':'')+
       (PUB.pay?'<label class="fld" for="rNote">備註（選填）<input id="rNote" maxlength="100" value="'+esc(rc.note||'')+'"></label>':'')+
       (gone.length?'<p class="err">購物車內有已下架的教材，請先移除。</p>':'')+
-      '<div class="err" id="cartErr" role="alert"></div>'+(PUB.pay?'<button type="button" class="btn btn-fill" id="goPay"'+(gone.length?' disabled':'')+'>前往付款</button>':'<p class="paynote" id="noPay">線上付款即將開放。現在想訂購，請先透過 LINE 聯繫我們，我們會協助你完成。</p><button type="button" class="btn btn-fill" data-ext="lineUrl" id="lineOrder">用 LINE 聯繫訂購</button>')+(PUB.pay?'<div class="pay"><span>信用卡</span><span>超商繳費</span><span>ATM 轉帳</span></div><p class="mfoot">按下「前往付款」後，會轉到綠界科技的付款頁面，可用方式以該頁顯示為準。教材為實體書籍，付款成功後會寄到上方地址。</p>':'')+'</aside></div>';
+      '<div class="err" id="cartErr" role="alert"></div>'+(PUB.pay?'<button type="button" class="btn btn-fill" id="goPay"'+(gone.length?' disabled':'')+'>前往付款</button>':'<p class="paynote" id="noPay">線上付款即將開放。現在想訂購，可以直接到下方賣場購買；也可以透過 LINE 聯繫我們，我們會協助你完成。</p><a class="btn btn-fill" id="shop711" href="https://myship.7-11.com.tw/general/detail/GM2605159360578" target="_blank" rel="noopener noreferrer">到賣貨便下單</a><a class="btn btn-fill" id="shopShopee" href="https://shopee.tw/jackbombjack" target="_blank" rel="noopener noreferrer">到蝦皮下單</a><button type="button" class="btn btn-line" data-ext="lineUrl" id="lineOrder">用 LINE 聯繫訂購</button>')+(PUB.pay?'<div class="pay"><span>信用卡</span><span>超商繳費</span><span>ATM 轉帳</span></div><p class="mfoot">按下「前往付款」後，會轉到綠界科技的付款頁面，可用方式以該頁顯示為準。教材為實體書籍，付款成功後會寄到上方地址。</p>':'')+'</aside></div>';
     $$('[data-inc]',app).forEach(function(b){b.addEventListener('click',function(){var id=b.getAttribute('data-inc');if(S.cart[id]<20)S.cart[id]++;save();refreshBadge();render()})});
     $$('[data-dec]',app).forEach(function(b){b.addEventListener('click',function(){var id=b.getAttribute('data-dec');S.cart[id]--;if(S.cart[id]<1)delete S.cart[id];save();refreshBadge();render()})});
     $$('[data-rm]',app).forEach(function(b){b.addEventListener('click',function(){delete S.cart[b.getAttribute('data-rm')];save();refreshBadge();render()})});
@@ -2814,7 +2814,7 @@ function initAdmin(){
   TABS.n=async function(body){
     var r=await sb.from('announcements').select('id,title,body,url,created_at').order('created_at',{ascending:false}).limit(30);
     if(r.error)throw r.error;
-    var pages={'':'會員專區','live.html':'直播專區','courses.html':'線上課程','membership.html':'付費會員','index.html':'首頁'};
+    var pages={'':'會員專區','live.html':'直播專區','courses.html':'線上課程','membership.html':'付費會員','tutoring.html':'線上家教','index.html':'首頁'};
     body.innerHTML='<form id="nForm" class="fm" novalidate style="max-width:560px;margin-bottom:22px"><h3>發送公告</h3>'+
       '<label class="fld" for="nT">標題（最多 40 字）<input id="nT" maxlength="40" placeholder="例如：本週六加開一場直播"></label>'+
       '<label class="fld" for="nB">內容（最多 120 字）<textarea id="nB" rows="3" maxlength="120" placeholder="手機通知會顯示這段文字"></textarea></label>'+
