@@ -1457,3 +1457,8 @@ s.lprice{color:var(--text-soft);font-weight:400;font-size:.82em;margin-right:.45
 .tcta .btn{margin-top:14px}
 @media (min-width:761px){.tfeat:last-child:nth-child(odd){grid-column:1/-1}}
 @media (max-width:760px){.tfeats{grid-template-columns:1fr}.tcta{padding:26px 18px}}
+
+/* ---------- 頁尾聯絡資訊 ---------- */
+.f-contact{font-size:13px;color:var(--dark-soft);margin-top:10px;line-height:1.9;letter-spacing:.04em}
+.f-contact a{color:inherit;text-decoration:underline;text-underline-offset:3px}
+.f-contact a:hover{color:#fff}
