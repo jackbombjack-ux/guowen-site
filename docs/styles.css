@@ -1462,3 +1462,13 @@ s.lprice{color:var(--text-soft);font-weight:400;font-size:.82em;margin-right:.45
 .f-contact{font-size:13px;color:var(--dark-soft);margin-top:10px;line-height:1.9;letter-spacing:.04em}
 .f-contact a{color:inherit;text-decoration:underline;text-underline-offset:3px}
 .f-contact a:hover{color:#fff}
+
+/* ---------- 免費資源封面圖(後台上傳)---------- */
+.r-thumb.has-img img{display:block;width:100%;height:100%;object-fit:cover}
+
+/* ---------- 首頁線上課程:手機版橫向滑動,跟自學教材一樣 ---------- */
+@media (max-width:760px){
+  .courses.hscroll{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;padding:4px 2px 12px;margin:-4px -2px -4px}
+  .courses.hscroll::-webkit-scrollbar{display:none}
+  .courses.hscroll>.course{flex:0 0 86%;min-width:0;scroll-snap-align:start}
+}

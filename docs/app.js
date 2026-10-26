@@ -881,7 +881,8 @@ function addDynCourse(r){
   GW.courses.push({id:r.id,name:r.name,url:'course.html?id='+encodeURIComponent(r.id),learn:'learn.html?id='+encodeURIComponent(r.id),chaps:[],dyn:true});
 }
 async function selRes(){
-  var r=await sb.from('resources').select('id,name,gate,storage_path,href,level,description,sort,active');
+  var r=await sb.from('resources').select('id,name,gate,storage_path,href,level,description,sort,active,image_path');
+  if(r.error)r=await sb.from('resources').select('id,name,gate,storage_path,href,level,description,sort,active');
   PUB.resNew=!r.error;
   if(r.error)r=await sb.from('resources').select('id,name,gate,storage_path,href');
   return r;
@@ -1281,7 +1282,7 @@ var RESLV=[['senior','高中'],['junior','國中'],['elem','國小'],['all','各
 function resHref(h){return /^https?:\/\/\S+$/i.test(h||'')?h:''}
 function resCardHtml(r,i){
   var gated=!!r.gate,motif={senior:'exam',junior:'notes',elem:'read',all:'essay'}[r.level]||'read',seed=60+(i%12);
-  return '<article class="rcard" id="card-'+esc(r.id)+'"><div class="r-thumb" data-thumb="'+seed+':'+motif+'"><i'+(gated?' id="tag-'+esc(r.id)+'">會員限定':'>公開')+'</i></div><div class="r-body"><h3 aria-level="2">'+esc(r.name)+'</h3><p>'+esc(r.description||'')+'</p><button type="button" class="btn btn-gold" data-res="'+esc(r.id)+'" data-gate="'+(gated?1:0)+'"'+(gated?'':' data-href="'+esc(resHref(r.href))+'"')+'>'+(gated?'加入會員領取 ':'前往閱讀 ')+'<svg class="ico"><use href="#'+(gated?'i-gift':'i-link')+'"/></svg></button></div></article>'}
+  return '<article class="rcard" id="card-'+esc(r.id)+'">'+(r.image_path?'<div class="r-thumb has-img"><img src="'+esc(mediaUrl(r.image_path))+'" alt="" loading="lazy" decoding="async">':'<div class="r-thumb" data-thumb="'+seed+':'+motif+'">')+'<i'+(gated?' id="tag-'+esc(r.id)+'">會員限定':'>公開')+'</i></div><div class="r-body"><h3 aria-level="2">'+esc(r.name)+'</h3><p>'+esc(r.description||'')+'</p><button type="button" class="btn btn-gold" data-res="'+esc(r.id)+'" data-gate="'+(gated?1:0)+'"'+(gated?'':' data-href="'+esc(resHref(r.href))+'"')+'>'+(gated?'加入會員領取 ':'前往閱讀 ')+'<svg class="ico"><use href="#'+(gated?'i-gift':'i-link')+'"/></svg></button></div></article>'}
 function resSorted(){
   return Object.keys(PUB.resources).map(function(k){return PUB.resources[k]}).filter(function(r){return r.active!==false}).sort(function(a,b){return ((a.sort||0)-(b.sort||0))||String(a.name).localeCompare(String(b.name))})}
 function paintThumbs(root){$$('[data-thumb]',root).forEach(function(el){if(el.querySelector('svg.sc,svg'))return;var p=el.getAttribute('data-thumb').split(':');el.insertAdjacentHTML('afterbegin',thumb(+p[0],p[1]))})}
@@ -2455,7 +2456,8 @@ function initAdmin(){
   var OPEN_C={};
   /* --- 免費資源:高中/國中/國小/各年級通用,可新增、改名、換檔案或連結、排序、下架、刪除 --- */
   TABS.f=async function(body){
-    var r=await sb.from('resources').select('id,name,gate,storage_path,href,level,description,sort,active').order('sort');
+    var hasImg=true,r=await sb.from('resources').select('id,name,gate,storage_path,href,level,description,sort,active,image_path').order('sort');
+    if(r.error){hasImg=false;r=await sb.from('resources').select('id,name,gate,storage_path,href,level,description,sort,active').order('sort')}
     if(r.error){body.innerHTML='<p class="mfoot">免費資源的管理功能需要先更新資料庫(執行最新的 SQL 檔案)才能使用。</p>';return}
     var rows=r.data||[];
     function lvOpts(sel){return RESLV.map(function(l){return '<option value="'+l[0]+'"'+(sel===l[0]?' selected':'')+'>'+l[1]+'</option>'}).join('')}
@@ -2464,6 +2466,12 @@ function initAdmin(){
     function chkUrl(u){return /^https?:\/\/\S+$/i.test(u)}
     function newPath(id,f){return id+'/'+Date.now().toString(36)+'.'+extOf(f)}
     function ctype(f){return f.type||'application/octet-stream'}
+    async function putImg(id,f){
+      var blob;try{blob=await shrinkImage(f,1200)}catch(_){return {err:'這張圖片無法讀取，請改用 JPG 或 PNG'}}
+      var pth='resources/'+id+'/cover-'+Date.now().toString(36)+'.jpg',u=await sb.storage.from('product-media').upload(pth,blob,{contentType:'image/jpeg',upsert:false});
+      if(u.error)return {err:'封面圖上傳失敗：'+niceErr(u.error)};
+      return {path:pth};
+    }
     var h='<form id="fAdd" class="fm" novalidate style="max-width:620px;margin-bottom:24px"><h3>新增免費資源</h3>'+
       '<label class="fld" for="fN">名稱<input id="fN" maxlength="60" placeholder="例如：國寫作文範文集"></label>'+
       '<label class="fld" for="fD">簡短說明(選填,卡片上顯示)<input id="fD" maxlength="80" placeholder="例如：十篇高分範文與評析"></label>'+
@@ -2471,6 +2479,7 @@ function initAdmin(){
       '<label class="fld" for="fT">類型<select id="fT"><option value="file">檔案(會員登入後領取下載)</option><option value="link">連結(公開,前往閱讀)</option></select></label></div>'+
       '<label class="fld" for="fU" id="fUw" style="display:none">連結網址<input id="fU" placeholder="https://…"></label>'+
       '<label class="fld" for="fF" id="fFw">上傳檔案(選填,PDF、Word、PowerPoint、Excel、ZIP、圖片皆可,單檔 50MB 內;之後也可以再補上)<input id="fF" type="file"></label>'+
+      (hasImg?'<label class="fld" for="fI">封面圖片(選填,JPG、PNG 或 WebP;建議橫式、比例約 2:1,例如 1200×600,其他尺寸會自動置中裁切;不上傳就使用預設的山水圖)<input id="fI" type="file" accept="image/jpeg,image/png,image/webp"></label>':'')+
       '<p class="err" id="fErr" role="alert"></p><button class="btn btn-fill" type="submit">新增</button></form>';
     h+='<h3>目前的免費資源</h3>';
     if(!rows.length)h+='<p class="mfoot">還沒有任何免費資源。</p>';
@@ -2478,7 +2487,7 @@ function initAdmin(){
       var rs=rows.filter(function(x){return (x.level||'all')===l[0]}).sort(function(a,b){return ((a.sort||0)-(b.sort||0))||String(a.name).localeCompare(String(b.name))});
       if(!rs.length)return;
       h+='<h4 style="margin:18px 0 8px">'+l[1]+'(前台顯示 '+rs.filter(function(x){return x.active}).length+' 項)</h4><div class="twrap"><table class="tbl rtab"><thead><tr><th>名稱 / 說明</th><th>區域</th><th>內容</th><th>排序</th><th>顯示</th><th></th></tr></thead><tbody>'+rs.map(function(x){
-        return '<tr data-rr="'+esc(x.id)+'"><td><input data-f="name" maxlength="60" value="'+esc(x.name)+'" aria-label="名稱" style="width:190px"><br><input data-f="desc" maxlength="80" value="'+esc(x.description||'')+'" aria-label="說明" placeholder="簡短說明" style="width:190px;margin-top:6px"></td>'+
+        return '<tr data-rr="'+esc(x.id)+'"><td><input data-f="name" maxlength="60" value="'+esc(x.name)+'" aria-label="名稱" style="width:190px"><br><input data-f="desc" maxlength="80" value="'+esc(x.description||'')+'" aria-label="說明" placeholder="簡短說明" style="width:190px;margin-top:6px">'+(hasImg?'<span class="rimg">'+(x.image_path?'<img src="'+esc(mediaUrl(x.image_path))+'" alt="" style="width:120px;height:58px;object-fit:cover;border-radius:6px;display:block;margin-top:8px"><label style="font-size:12px"><input data-f="imgrm" type="checkbox"> 移除封面圖</label><br>':'<small style="display:block;margin-top:8px">封面圖：使用預設山水圖</small>')+'<input data-f="img" type="file" accept="image/jpeg,image/png,image/webp" aria-label="'+(x.image_path?'更換封面圖':'上傳封面圖')+'" style="max-width:190px"></span>':'')+'</td>'+
           '<td><select data-f="level" aria-label="區域">'+lvOpts(x.level||'all')+'</select></td>'+
           '<td><select data-f="type" aria-label="類型"><option value="file"'+(x.gate?' selected':'')+'>檔案</option><option value="link"'+(x.gate?'':' selected')+'>連結</option></select><br>'+
             '<span data-w="file"'+(x.gate?'':' style="display:none"')+'><small>'+(x.storage_path?'目前檔案：'+esc(baseName(x.storage_path)):'尚未上傳檔案')+'</small><br><input data-f="file" type="file" aria-label="'+(x.storage_path?'更換檔案':'上傳檔案')+'" style="max-width:190px"></span>'+
@@ -2493,15 +2502,21 @@ function initAdmin(){
     $$('[data-f=type]',body).forEach(function(sel){sel.addEventListener('change',function(){
       var tr=sel.closest('[data-rr]');$('[data-w=file]',tr).style.display=sel.value==='file'?'':'none';$('[data-w=link]',tr).style.display=sel.value==='link'?'':'none'})});
     $('#fAdd',body).addEventListener('submit',async function(e){
-      e.preventDefault();var er=$('#fErr',body),name=$('#fN',body).value.trim(),desc=$('#fD',body).value.trim(),lv=$('#fL',body).value,type=fT.value,url=$('#fU',body).value.trim(),file=$('#fF',body).files[0];
+      e.preventDefault();var er=$('#fErr',body),name=$('#fN',body).value.trim(),desc=$('#fD',body).value.trim(),lv=$('#fL',body).value,type=fT.value,url=$('#fU',body).value.trim(),file=$('#fF',body).files[0],imgf=hasImg&&$('#fI',body)?$('#fI',body).files[0]:null;
       er.textContent='';
       if(!name){er.textContent='請填寫名稱。';return}
       if(type==='link'&&!chkUrl(url)){er.textContent='連結網址要以 https:// 開頭。';return}
       if(type==='file'&&file&&file.size>52428800){er.textContent='檔案超過 50MB,請壓縮後再上傳。';return}
+      if(imgf&&!/^image\//.test(imgf.type||'')){er.textContent='封面圖片請選 JPG、PNG 或 WebP 圖片檔。';return}
       var btn=$('button[type=submit]',this);btn.disabled=true;
       var id='r'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),mx=0;rows.forEach(function(x){if((x.sort||0)>mx)mx=x.sort||0});
       var ins=await sb.from('resources').insert({id:id,name:name,description:desc||null,level:lv,gate:type==='file',href:type==='link'?url:null,sort:mx+1,active:true});
       if(ins.error){btn.disabled=false;er.textContent='新增失敗：'+niceErr(ins.error);return}
+      if(imgf){
+        var pi=await putImg(id,imgf);
+        if(pi.err){toast('已新增，但'+pi.err+'。可以在下方列表重新上傳封面圖。')}
+        else{var ui=await sb.from('resources').update({image_path:pi.path}).eq('id',id);if(ui.error){toast('已新增，但封面圖沒有綁上：'+niceErr(ui.error));try{await sb.storage.from('product-media').remove([pi.path])}catch(_){}}}
+      }
       if(type==='file'&&file){
         var pth=newPath(id,file),up=await sb.storage.from('resources').upload(pth,file,{contentType:ctype(file),upsert:false});
         if(up.error){btn.disabled=false;toast('已新增，但檔案上傳失敗：'+niceErr(up.error)+'。可以在下方列表重新上傳。');TABS.f(body);return}
@@ -2512,8 +2527,9 @@ function initAdmin(){
     });
     $$('[data-fsave]',body).forEach(function(b){b.addEventListener('click',async function(){
       var tr=b.closest('[data-rr]'),id=b.getAttribute('data-fsave'),x=rows.filter(function(q){return q.id===id})[0],
-        name=$('[data-f=name]',tr).value.trim(),type=$('[data-f=type]',tr).value,url=$('[data-f=href]',tr).value.trim(),file=$('[data-f=file]',tr).files[0];
+        name=$('[data-f=name]',tr).value.trim(),type=$('[data-f=type]',tr).value,url=$('[data-f=href]',tr).value.trim(),file=$('[data-f=file]',tr).files[0],imgf=hasImg&&$('[data-f=img]',tr)?$('[data-f=img]',tr).files[0]:null,imgrm=hasImg&&$('[data-f=imgrm]',tr)&&$('[data-f=imgrm]',tr).checked;
       if(!name){toast('名稱不能空白');return}
+      if(imgf&&!/^image\//.test(imgf.type||'')){toast('封面圖片請選 JPG、PNG 或 WebP 圖片檔');return}
       if(type==='link'&&!chkUrl(url)){toast('連結網址要以 https:// 開頭');return}
       if(type==='file'&&file&&file.size>52428800){toast('檔案超過 50MB，請壓縮後再上傳');return}
       b.disabled=true;
@@ -2522,9 +2538,15 @@ function initAdmin(){
         newP=newPath(id,file);var up=await sb.storage.from('resources').upload(newP,file,{contentType:ctype(file),upsert:false});
         if(up.error){b.disabled=false;toast('檔案上傳失敗：'+niceErr(up.error));return}
         patch.storage_path=newP}
+      var oldImg=x.image_path,newImg=null;
+      if(hasImg){
+        if(imgf){var pi=await putImg(id,imgf);if(pi.err){b.disabled=false;if(newP){try{await sb.storage.from('resources').remove([newP])}catch(_){}}toast(pi.err);return}newImg=pi.path;patch.image_path=newImg}
+        else if(imgrm){patch.image_path=null}
+      }
       var u=await sb.from('resources').update(patch).eq('id',id);
-      if(u.error){b.disabled=false;if(newP){try{await sb.storage.from('resources').remove([newP])}catch(_){}}toast('儲存失敗：'+niceErr(u.error));return}
+      if(u.error){b.disabled=false;if(newP){try{await sb.storage.from('resources').remove([newP])}catch(_){}}if(newImg){try{await sb.storage.from('product-media').remove([newImg])}catch(_){}}toast('儲存失敗：'+niceErr(u.error));return}
       if(newP&&oldPath&&oldPath!==newP){try{await sb.storage.from('resources').remove([oldPath])}catch(_){}}
+      if(oldImg&&oldImg!==newImg&&(newImg||imgrm)){try{await sb.storage.from('product-media').remove([oldImg])}catch(_){}}
       toast('已儲存');TABS.f(body);
     })});
     $$('[data-fdel]',body).forEach(function(b){b.addEventListener('click',async function(){
@@ -2534,6 +2556,7 @@ function initAdmin(){
       var d=await sb.from('resources').delete().eq('id',id).select('id');
       if(d.error||!(d.data&&d.data.length)){b.disabled=false;b.classList.remove('arm');b.textContent='刪除';toast('刪除失敗：'+(d.error?niceErr(d.error):'沒有權限或資料已不存在'));return}
       if(x&&x.storage_path){try{await sb.storage.from('resources').remove([x.storage_path])}catch(_){}}
+      if(x&&x.image_path){try{await sb.storage.from('product-media').remove([x.image_path])}catch(_){}}
       toast('已刪除');TABS.f(body);
     })});
   };
