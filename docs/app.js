@@ -1937,8 +1937,8 @@ function initAdmin(){
     }catch(e){}
   }
   async function tiles(){
-    var c=await Promise.all([count('essays',function(q){return q.eq('status','pending')}),count('orders',function(q){return q.eq('status','paid').eq('fulfillment','to_ship')}),count('memberships',function(q){return q.eq('status','active')})]);
-    var t=$('#tiles');if(t)t.innerHTML='<div class="tile"><b>'+c[0]+'</b><span>待批改作文</span></div><div class="tile"><b>'+c[1]+'</b><span>待出貨訂單</span></div><div class="tile"><b>'+c[2]+'</b><span>訂閱中的會員</span></div>';
+    var c=await Promise.all([count('essays',function(q){return q.eq('status','pending')}),count('orders',function(q){return q.eq('status','paid').eq('fulfillment','to_ship')}),count('profiles',function(q){return q.eq('role','student')})]);
+    var t=$('#tiles');if(t)t.innerHTML='<div class="tile"><b>'+c[0]+'</b><span>待批改作文</span></div><div class="tile"><b>'+c[1]+'</b><span>待出貨訂單</span></div><div class="tile"><b>'+c[2]+'</b><span>會員人數</span></div>';
   }
   var TABS={};
 
