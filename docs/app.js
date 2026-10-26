@@ -774,13 +774,6 @@ function renderDyn(){
   if(PAGE==='course-dyn')dynCourse();
   if(PAGE==='learn-dyn')dynLearn();
 }
-function updateBookCount(){
-  var b=$('.stat b[data-u="本"]');if(!b||!PUB.prodLoaded)return;
-  var n=GW.products.filter(function(g){var r=PUB.products[g.id];return !goneP(g.id)&&!(r&&r.active===false)&&!(g.dyn&&!(r&&r.active))}).length;
-  var old=+b.getAttribute('data-n'),cur=parseInt(b.textContent,10);
-  b.setAttribute('data-n',n);
-  if(cur===old&&b.firstChild)b.firstChild.nodeValue=String(n);
-}
 function renderMaterialsPage(dp){
   var holder=$('.pg .wrap .section.first'),w=$('.pg .wrap'),lp=$('.lead-p'),cats=PUB.cats||[];
   if(lp)lp.textContent=lp.textContent.replace(/共有\s*\d+\s*本/,'共有 '+GW.products.length+' 本');
@@ -917,7 +910,7 @@ async function loadPublic(){
   }catch(e){}
   renderDyn();
   tagPrice();applyProductContent();
-  applyChapters();applyCoursePrice();applyCourseContent();hideGone();renderResources();updateBookCount();
+  applyChapters();applyCoursePrice();applyCourseContent();hideGone();renderResources();
   Object.keys(PUB.products).forEach(function(id){
     if(!PUB.products[id].active)$$('[data-add="'+id+'"]').forEach(function(b){b.classList.add('off');b.setAttribute('title','暫時無法購買')});
   });
