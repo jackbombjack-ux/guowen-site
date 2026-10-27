@@ -1472,3 +1472,12 @@ s.lprice{color:var(--text-soft);font-weight:400;font-size:.82em;margin-right:.45
   .courses.hscroll::-webkit-scrollbar{display:none}
   .courses.hscroll>.course{flex:0 0 86%;min-width:0;scroll-snap-align:start}
 }
+
+/* ---------- 免費資源:學段專區分頁 ---------- */
+.rtabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:4px 0 26px;padding:6px;background:var(--paper-2);border-radius:18px}
+.rtab{min-height:52px;padding:12px 6px;border-radius:13px;font-family:var(--font-serif);font-weight:900;font-size:clamp(15px,2.3vw,21px);letter-spacing:.1em;color:var(--text-soft);background:transparent;cursor:pointer;transition:background .28s ease,color .28s ease,box-shadow .28s ease,transform .28s ease}
+.rtab:hover{color:var(--text)}
+.rtab[aria-selected="true"]{background:var(--btn-bg);color:var(--btn-fg);box-shadow:var(--shadow-sm);transform:translateY(-1px)}
+.rpanel.in{animation:rpanelIn .34s ease both}
+@keyframes rpanelIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.rpanel.in{animation:none}.rtab{transition:none}}

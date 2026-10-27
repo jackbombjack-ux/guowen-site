@@ -1276,7 +1276,7 @@ function initCart(){
 }
 
 /* ---------- 免費資源 ---------- */
-var RES_REBIND=null;
+var RES_REBIND=null,RES_LV='senior',RES_LVSET=false;
 function rebindRes(){if(RES_REBIND)RES_REBIND()}
 var RESLV=[['senior','高中'],['junior','國中'],['elem','國小'],['all','各年級通用']];
 function resHref(h){return /^https?:\/\/\S+$/i.test(h||'')?h:''}
@@ -1290,11 +1290,31 @@ function renderResources(){
   if(!PUB.resNew)return;
   var list=resSorted(),box=$('#resBody'),hb=$('#homeRes');
   if(box){
-    box.innerHTML=RESLV.map(function(l){
-      var rs=list.filter(function(r){return (r.level||'all')===l[0]});
-      if(l[0]==='all'&&!rs.length)return '';
-      var idx=0;
-      return '<section class="reslv" aria-label="'+l[1]+'資源"><h2>'+l[1]+'</h2>'+(rs.length?'<div class="res">'+rs.map(function(r){return resCardHtml(r,idx++)}).join('')+'</div>':'<p class="resnone">資源準備中，敬請期待。</p>')+'</section>'}).join('');
+    var T3=RESLV.slice(0,3);
+    if(!RES_LVSET){RES_LVSET=true;var h0=(location.hash||'').replace('#','');if(T3.some(function(l){return l[0]===h0}))RES_LV=h0}
+    var panelHtml=function(){
+      return [RES_LV,'all'].map(function(k){
+        var l=RESLV.filter(function(x){return x[0]===k})[0],rs=list.filter(function(r){return (r.level||'all')===k});
+        if(k==='all'&&!rs.length)return '';
+        var idx=0;
+        return '<section class="reslv" aria-label="'+l[1]+'資源">'+(k==='all'?'<h2>'+l[1]+'</h2>':'')+(rs.length?'<div class="res">'+rs.map(function(r){return resCardHtml(r,idx++)}).join('')+'</div>':'<p class="resnone">資源準備中，敬請期待。</p>')+'</section>'}).join('')};
+    box.innerHTML='<div class="rtabs" role="tablist" aria-label="選擇學段專區">'+T3.map(function(l){var on=l[0]===RES_LV;return '<button type="button" role="tab" class="rtab" id="rtab-'+l[0]+'" data-lv="'+l[0]+'" aria-selected="'+on+'" aria-controls="rpanel" tabindex="'+(on?0:-1)+'">'+l[1]+'專區</button>'}).join('')+'</div><div class="rpanel in" id="rpanel" role="tabpanel" aria-labelledby="rtab-'+RES_LV+'">'+panelHtml()+'</div>';
+    var panel=$('#rpanel',box),tabs=$$('.rtab',box);
+    var pick=function(lv,focus){
+      if(lv===RES_LV&&!focus)return;
+      var changed=lv!==RES_LV;RES_LV=lv;
+      tabs.forEach(function(t){var on=t.getAttribute('data-lv')===lv;t.setAttribute('aria-selected',on?'true':'false');t.setAttribute('tabindex',on?'0':'-1');if(on&&focus)t.focus()});
+      if(!changed)return;
+      panel.setAttribute('aria-labelledby','rtab-'+lv);
+      panel.classList.remove('in');void panel.offsetWidth;
+      panel.innerHTML=panelHtml();paintThumbs(panel);panel.classList.add('in');
+      try{history.replaceState(null,'','#'+lv)}catch(_){}
+      rebindRes()};
+    tabs.forEach(function(t,i){
+      t.addEventListener('click',function(){pick(t.getAttribute('data-lv'))});
+      t.addEventListener('keydown',function(e){
+        var n=e.key==='ArrowRight'?(i+1)%3:e.key==='ArrowLeft'?(i+2)%3:e.key==='Home'?0:e.key==='End'?2:-1;
+        if(n<0)return;e.preventDefault();pick(tabs[n].getAttribute('data-lv'),true)})});
     paintThumbs(box)}
   if(hb){hb.innerHTML=list.slice(0,4).map(function(r,i){return resCardHtml(r,i)}).join('');paintThumbs(hb)}
   rebindRes();
