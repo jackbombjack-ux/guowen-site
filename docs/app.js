@@ -1175,7 +1175,7 @@ function ytId(v){
 }
 function initLearn(){
   var app=$('#learnApp');if(!app)return;var cid=app.getAttribute('data-course'),c=byId(GW.courses,cid);if(!cid||!c)return;
-  var cur=0,panelOn=true,chapters=null,vids={},progT=null,drawn=false;
+  var cur=0,panelOn=true,chapters=null,vids={},notes={},progT=null,drawn=false;
   function gate(kind){
     var db=PUB.courses[cid],open=db&&db.status==='open';
     var t,b,btnTxt;
@@ -1197,8 +1197,9 @@ function initLearn(){
     chapters=(ch.data||[]).map(function(x){return {id:x.id,title:x.title}});
     if(!chapters.length)chapters=c.chaps.map(function(t){return {id:null,title:t}});
     var ids=chapters.map(function(x){return x.id}).filter(Boolean);
-    vids={};
-    if(ids.length){var v=await sb.from('chapter_videos').select('chapter_id,youtube_id').in('chapter_id',ids);(v.data||[]).forEach(function(x){vids[x.chapter_id]=x.youtube_id})}
+    vids={};notes={};
+    if(ids.length){var v=await sb.from('chapter_videos').select('chapter_id,youtube_id').in('chapter_id',ids);(v.data||[]).forEach(function(x){vids[x.chapter_id]=x.youtube_id});
+      var nt=await sb.from('chapter_notes').select('chapter_id,body').in('chapter_id',ids);if(!nt.error)(nt.data||[]).forEach(function(x){notes[x.chapter_id]=x.body})}
     var p=await sb.from('progress').select('position').eq('user_id',U.id).eq('course_id',cid).maybeSingle();
     cur=Math.max(0,Math.min((p.data&&p.data.position)||0,chapters.length-1));
   }
@@ -1209,13 +1210,15 @@ function initLearn(){
   function player(){
     app.innerHTML='<div class="lp-bar"><h2>'+esc(c.name)+'</h2><div><button type="button" class="btn btn-line sm" id="lToggle" aria-expanded="'+panelOn+'">章節清單</button> <a class="btn btn-line sm" href="'+c.url+'">課程資訊</a></div></div>'+
      '<div class="lp-grid'+(panelOn?'':' nopanel')+'" id="lpg"><div><div class="vid" id="vid"></div><div class="lp-nav"><button type="button" class="btn btn-line sm" id="lPrev">上一章</button><span id="lPos" style="font-size:13px;color:var(--text-soft)"></span><button type="button" class="btn btn-fill sm" id="lNext">下一章</button></div></div>'+
-     '<aside class="lpanel" aria-label="章節與字幕"><div class="tabs" role="tablist"><button type="button" role="tab" id="lt1">課程章節</button><button type="button" role="tab" id="lt2">字幕</button></div><div class="chaps" id="chaps"></div><div class="subs" id="subs" hidden>字幕請在影片播放器右下角的「CC」按鈕開啟。</div></aside></div>';
+     '<aside class="lpanel" aria-label="章節與精華筆記"><div class="tabs" role="tablist"><button type="button" role="tab" id="lt1">課程章節</button><button type="button" role="tab" id="lt2">精華筆記</button></div><div class="chaps" id="chaps"></div><div class="subs" id="subs" hidden></div></aside></div>';
     function draw(){
       $('#chaps').innerHTML=chapters.map(function(t,i){return '<button type="button" class="chap" data-ch="'+i+'" aria-current="'+(i===cur)+'"><i>'+String(i+1).padStart(2,'0')+'</i><span>'+esc(t.title)+'</span></button>'}).join('');
       $$('[data-ch]',app).forEach(function(b){b.addEventListener('click',function(){cur=+b.getAttribute('data-ch');saveProg();draw()})});
       var yid=chapters[cur].id&&vids[chapters[cur].id];
       $('#vid').innerHTML=yid?'<iframe src="https://www.youtube-nocookie.com/embed/'+encodeURIComponent(yid)+'?rel=0&modestbranding=1&playsinline=1" title="'+esc(chapters[cur].title)+'" allow="accelerometer; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" style="position:absolute;inset:0;width:100%;height:100%;border:0"></iframe>':
         scene(80+(cid==='guoxie'?0:1),{amp:.8,sun:true,sunx:520,suny:90})+'<div class="cap"><small>第 '+(cur+1)+' 章</small>'+esc(chapters[cur].title)+'・影片準備中</div>';
+      var nb=chapters[cur].id&&notes[chapters[cur].id];
+      $('#subs').innerHTML=nb?'<div class="nbody">'+esc(nb)+'</div>':'<p class="nnone">這一章的精華筆記準備中。</p>';
       $('#lPos').textContent='第 '+(cur+1)+' / '+chapters.length+' 章';
       $('#lPrev').disabled=cur===0;$('#lNext').disabled=cur===chapters.length-1;
     }
@@ -1237,7 +1240,7 @@ function initLearn(){
 }
 
 /* ---------- 購物車與結帳 ---------- */
-var RC_KEY='gw-rcpt';
+var RC_KEY='gw-rcpt',HOME_FEE=170;
 function loadRc(){try{return JSON.parse(localStorage.getItem(RC_KEY))||{}}catch(e){return {}}}
 function saveRc(o){try{localStorage.setItem(RC_KEY,JSON.stringify(o))}catch(e){}}
 function initCart(){
@@ -1248,18 +1251,20 @@ function initCart(){
     var rc=loadRc();
     var gone=ids.filter(function(id){return PUB.products[id]&&!PUB.products[id].active});
     var needShip=ids.some(function(id){return !PUB.products[id]||PUB.products[id].kind==='physical'});
+    var shipM=(rc.ship==='cvs_711'||rc.ship==='cvs_family')?rc.ship:'home',shipFee=(needShip&&PUB.pay&&shipM==='home')?HOME_FEE:0;
     app.innerHTML='<div class="cp"><div class="cp-list" id="cpl">'+ids.map(function(id){var p=byId(GW.products,id);
       return '<div class="ci"><a href="'+p.url+'"><img src="'+esc(p.coverUrl||(p.cover?'images/'+p.cover:'images/favicon.png'))+'" alt="'+esc(p.title)+' 封面"></a><div><b>'+esc(p.name)+'</b><small>'+money(p.price)+'</small><div class="qty"><button type="button" data-dec="'+id+'" aria-label="減少數量">−</button><span>'+S.cart[id]+'</span><button type="button" data-inc="'+id+'" aria-label="增加數量">+</button></div></div><button type="button" class="rm" data-rm="'+id+'">移除</button></div>'}).join('')+
-      '</div><aside class="cp-sum"><h2>訂單摘要</h2>'+ids.map(function(id){var p=byId(GW.products,id);return '<div class="row"><span>'+esc(p.name)+' × '+S.cart[id]+'</span><span>'+money(p.price*S.cart[id])+'</span></div>'}).join('')+'<div class="row total"><span>合計</span><span>'+money(cartSum())+'</span></div>'+
-      (needShip&&PUB.pay?'<div class="rcpt"><h3>收件資料</h3><label class="fld" for="rName">收件人<input id="rName" autocomplete="name" maxlength="30" value="'+esc(rc.name||'')+'"></label><label class="fld" for="rPhone">手機<input id="rPhone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" value="'+esc(rc.phone||'')+'"></label><label class="fld" for="rAddr">收件地址<input id="rAddr" autocomplete="street-address" maxlength="120" value="'+esc(rc.address||'')+'"></label></div>':'')+
+      '</div><aside class="cp-sum"><h2>訂單摘要</h2>'+ids.map(function(id){var p=byId(GW.products,id);return '<div class="row"><span>'+esc(p.name)+' × '+S.cart[id]+'</span><span>'+money(p.price*S.cart[id])+'</span></div>'}).join('')+(needShip&&PUB.pay?'<div class="row"><span>運費（'+(shipM==='home'?'黑貓宅配':'超商取貨')+'）</span><span>'+(shipFee?money(shipFee):'免運費')+'</span></div>':'')+'<div class="row total"><span>合計</span><span>'+money(cartSum()+shipFee)+'</span></div>'+
+      (needShip&&PUB.pay?'<div class="rcpt"><h3>收件資料</h3><label class="fld" for="rName">收件人<input id="rName" autocomplete="name" maxlength="30" value="'+esc(rc.name||'')+'"></label><label class="fld" for="rPhone">手機<input id="rPhone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" value="'+esc(rc.phone||'')+'"></label><fieldset class="shipm"><legend>取貨方式</legend>'+[['home','黑貓宅配','運費 NT$'+HOME_FEE],['cvs_711','7-11 超商取貨','免運費'],['cvs_family','全家超商取貨','免運費']].map(function(o){return '<label class="shipopt'+(shipM===o[0]?' on':'')+'"><input type="radio" name="shipm" value="'+o[0]+'"'+(shipM===o[0]?' checked':'')+'><span>'+o[1]+'</span><em>'+o[2]+'</em></label>'}).join('')+'</fieldset>'+(shipM==='home'?'<label class="fld" for="rAddr">收件地址<input id="rAddr" autocomplete="street-address" maxlength="120" value="'+esc(rc.address||'')+'"></label>':'<label class="fld" for="rStore">取貨門市名稱<input id="rStore" maxlength="30" placeholder="例如：崇賢門市" value="'+esc(rc.store||'')+'"></label><label class="fld" for="rStoreId">門市店號<input id="rStoreId" maxlength="10" inputmode="text" placeholder="門市的店號代碼" value="'+esc(rc.storeId||'')+'"></label><p class="mfoot">'+(shipM==='cvs_711'?'店號可在 <a href="https://emap.pcsc.com.tw/" target="_blank" rel="noopener noreferrer">7-11 門市查詢</a> 找到':'店號可在全家官網的門市查詢找到')+'，填錯會寄不到，請再確認一次。</p>')+'</div>':'')+
       (PUB.pay?'<label class="fld" for="rNote">備註（選填）<input id="rNote" maxlength="100" value="'+esc(rc.note||'')+'"></label>':'')+
       (gone.length?'<p class="err">購物車內有已下架的教材，請先移除。</p>':'')+
       '<div class="err" id="cartErr" role="alert"></div>'+(PUB.pay?'<button type="button" class="btn btn-fill" id="goPay"'+(gone.length?' disabled':'')+'>前往付款</button>':'<p class="paynote" id="noPay">線上付款即將開放。現在想訂購，可以直接到下方賣場購買；也可以透過 LINE 聯繫我們，我們會協助你完成。</p><a class="btn btn-fill" id="shop711" href="https://myship.7-11.com.tw/general/detail/GM2605159360578" target="_blank" rel="noopener noreferrer">到賣貨便下單</a><a class="btn btn-fill" id="shopShopee" href="https://shopee.tw/jackbombjack" target="_blank" rel="noopener noreferrer">到蝦皮下單</a><button type="button" class="btn btn-line" data-ext="lineUrl" id="lineOrder">用 LINE 聯繫訂購</button>')+(PUB.pay?'<div class="pay"><span>信用卡</span><span>超商繳費</span><span>ATM 轉帳</span></div><p class="mfoot">按下「前往付款」後，會轉到綠界科技的付款頁面，可用方式以該頁顯示為準。教材為實體書籍，付款成功後會寄到上方地址。</p><p class="mfoot" id="altShop">也可以選擇到賣場購買：</p><a class="btn btn-line" id="shop711" href="https://myship.7-11.com.tw/general/detail/GM2605159360578" target="_blank" rel="noopener noreferrer">到賣貨便下單</a><a class="btn btn-line" id="shopShopee" href="https://shopee.tw/jackbombjack" target="_blank" rel="noopener noreferrer">到蝦皮下單</a>':'')+'</aside></div>';
     $$('[data-inc]',app).forEach(function(b){b.addEventListener('click',function(){var id=b.getAttribute('data-inc');if(S.cart[id]<20)S.cart[id]++;save();refreshBadge();render()})});
     $$('[data-dec]',app).forEach(function(b){b.addEventListener('click',function(){var id=b.getAttribute('data-dec');S.cart[id]--;if(S.cart[id]<1)delete S.cart[id];save();refreshBadge();render()})});
     $$('[data-rm]',app).forEach(function(b){b.addEventListener('click',function(){delete S.cart[b.getAttribute('data-rm')];save();refreshBadge();render()})});
-    function readRc(){return {name:($('#rName')||{}).value||'',phone:($('#rPhone')||{}).value||'',address:($('#rAddr')||{}).value||'',note:($('#rNote')||{}).value||''}}
-    ['rName','rPhone','rAddr','rNote'].forEach(function(id){var el=$('#'+id);if(el)el.addEventListener('input',function(){saveRc(readRc())})});
+    function readRc(){var o=loadRc();[['rName','name'],['rPhone','phone'],['rAddr','address'],['rNote','note'],['rStore','store'],['rStoreId','storeId']].forEach(function(x){var el=$('#'+x[0]);if(el)o[x[1]]=el.value});var rd=$('input[name=shipm]:checked',app);if(rd)o.ship=rd.value;['name','phone','address','note','store','storeId'].forEach(function(k){o[k]=o[k]||''});return o}
+    ['rName','rPhone','rAddr','rNote','rStore','rStoreId'].forEach(function(id){var el=$('#'+id);if(el)el.addEventListener('input',function(){saveRc(readRc())})});
+    $$('input[name=shipm]',app).forEach(function(rd){rd.addEventListener('change',function(){saveRc(readRc());render()})});
     var lo=$('#lineOrder');if(lo)lo.addEventListener('click',function(){ext('lineUrl')});
     var gp=$('#goPay');if(gp)gp.addEventListener('click',function(){
       var r=readRc(),err=$('#cartErr');err.textContent='';
@@ -1267,9 +1272,13 @@ function initCart(){
       if(needShip){
         if(r.name.trim().length<2){err.textContent='請填寫收件人姓名。';return}
         if(!/^[0-9+\-\s()]{8,20}$/.test(r.phone.trim())){err.textContent='請填寫正確的手機號碼。';return}
-        if(r.address.trim().length<6){err.textContent='請填寫完整的收件地址。';return}
+        if(shipM==='home'){if(r.address.trim().length<6){err.textContent='請填寫完整的收件地址。';return}}
+        else{
+          if(r.store.trim().length<2){err.textContent='請填寫取貨門市名稱。';return}
+          if(!/^[0-9A-Za-z]{3,10}$/.test(r.storeId.trim())){err.textContent='請填寫正確的門市店號（3～10 個英數字）。';return}
+        }
       }
-      checkout({type:'cart',items:ids.map(function(id){return {id:id,qty:S.cart[id]}}),recipient:needShip?{name:r.name.trim(),phone:r.phone.trim(),address:r.address.trim()}:undefined,note:r.note.trim()||undefined},this,err);
+      checkout({type:'cart',items:ids.map(function(id){return {id:id,qty:S.cart[id]}}),recipient:needShip?{name:r.name.trim(),phone:r.phone.trim(),address:shipM==='home'?r.address.trim():undefined}:undefined,shipping:needShip?{method:shipM,store_name:shipM==='home'?undefined:r.store.trim(),store_id:shipM==='home'?undefined:r.storeId.trim()}:undefined,note:r.note.trim()||undefined},this,err);
     });
   }
   onAuth.push(render);render();
@@ -2155,19 +2164,45 @@ function initAdmin(){
       });
   }
 
-  /* --- 訂單 --- */
+  /* --- 訂單:準備寄出 / 已寄出 / 已完成 / 其他(課程、會員、未付款) --- */
+  var ORD_TAB='to_ship';
   TABS.o=async function(body){
     await loadNames();
-    var r=await sb.from('orders').select('id,merchant_trade_no,user_id,kind,status,amount,plan_id,course_id,recipient_name,recipient_phone,recipient_address,note,fulfillment,created_at,order_items(name,qty)').order('created_at',{ascending:false}).limit(150);
+    var cols='id,merchant_trade_no,user_id,kind,status,amount,plan_id,course_id,recipient_name,recipient_phone,recipient_address,note,fulfillment,created_at,order_items(name,qty)';
+    var r=await sb.from('orders').select(cols+',ship_method,shipping_fee,cvs_store_name,cvs_store_id').order('created_at',{ascending:false}).limit(300);
+    if(r.error)r=await sb.from('orders').select(cols).order('created_at',{ascending:false}).limit(300);
     var rows=r.data||[];
-    body.innerHTML='<div class="twrap"><table class="tbl"><thead><tr><th>日期</th><th>會員</th><th>內容</th><th>金額</th><th>付款</th><th>出貨</th></tr></thead><tbody>'+rows.map(function(o){
+    function grp(o){return o.kind==='product'&&o.status==='paid'?(o.fulfillment==='shipped'?'shipped':o.fulfillment==='done'?'done':'to_ship'):'other'}
+    var OT=[['to_ship','準備寄出'],['shipped','已寄出'],['done','已完成'],['other','其他']],cnt={};
+    OT.forEach(function(t){cnt[t[0]]=0});rows.forEach(function(o){cnt[grp(o)]++});
+    var list=rows.filter(function(o){return grp(o)===ORD_TAB});
+    var SHIPN={home:'黑貓宅配',cvs_711:'7-11 超商取貨',cvs_family:'全家超商取貨'};
+    function shipInfo(o){
+      var m=o.ship_method;if(!m)return '';
+      return '<b>'+SHIPN[m]+'</b>'+(o.cvs_store_name?'<br>門市：'+esc(o.cvs_store_name)+'（店號 '+esc(o.cvs_store_id||'')+'）':'')+'<br>';
+    }
+    var tabsH='<div class="rtabs o4" role="tablist" aria-label="訂單分類">'+OT.map(function(t){var on=t[0]===ORD_TAB;return '<button type="button" role="tab" class="rtab" data-ot="'+t[0]+'" aria-selected="'+on+'">'+t[1]+' <small>('+cnt[t[0]]+')</small></button>'}).join('')+'</div>';
+    var emptyMsg={to_ship:'目前沒有準備寄出的訂單',shipped:'目前沒有已寄出的訂單',done:'目前沒有已完成的訂單',other:'沒有其他訂單'}[ORD_TAB];
+    body.innerHTML=tabsH+'<div class="twrap"><table class="tbl"><thead><tr><th>日期</th><th>會員</th><th>內容</th><th>金額</th><th>付款</th><th>'+(ORD_TAB==='other'?'操作':'出貨')+'</th></tr></thead><tbody>'+list.map(function(o){
       var what=o.kind==='product'?(o.order_items||[]).map(function(i){return esc(i.name)+' × '+i.qty}).join('<br>'):o.kind==='membership'?'付費會員（'+esc(planName(o.plan_id))+'）':esc((byId(GW.courses,o.course_id)||{}).name||'線上課程');
-      var rec=o.kind==='product'?'<details><summary>收件資料</summary>'+esc(o.recipient_name||'')+'<br>'+esc(o.recipient_phone||'')+'<br>'+esc(o.recipient_address||'')+(o.note?'<br>備註：'+esc(o.note):'')+'</details>':'';
-      var ship=o.kind==='product'&&o.status==='paid'?'<select data-ful="'+o.id+'">'+['to_ship','shipped','done'].map(function(v){return '<option value="'+v+'"'+(o.fulfillment===v?' selected':'')+'>'+FUL[v]+'</option>'}).join('')+'</select>':'—';
-      return '<tr><td>'+fmtDate(o.created_at)+'</td><td>'+esc(nm(o.user_id))+'</td><td>'+what+rec+'</td><td>'+money(o.amount)+'</td><td><span class="pill '+(o.status==='paid'?'ok':o.status==='pending'?'warn':'')+'">'+ORD_ST[o.status]+'</span></td><td>'+ship+'</td></tr>'}).join('')+(rows.length?'':'<tr><td colspan="6" class="none">還沒有訂單</td></tr>')+'</tbody></table></div><p class="mfoot">教材付款成功後會自動列為「準備寄出」。寄出後請改成「已寄出」。</p>';
+      var rec=o.kind==='product'?'<details'+(ORD_TAB==='to_ship'?' open':'')+'><summary>收件資料</summary>'+shipInfo(o)+esc(o.recipient_name||'')+'<br>'+esc(o.recipient_phone||'')+'<br>'+esc(o.recipient_address||'')+(o.note?'<br>備註：'+esc(o.note):'')+'</details>':'';
+      var act;
+      if(ORD_TAB==='other')act=o.status!=='paid'?'<button type="button" class="btn btn-line sm pdel" data-odel="'+o.id+'">刪除</button>':'—';
+      else act='<select data-ful="'+o.id+'" aria-label="出貨狀態">'+['to_ship','shipped','done'].map(function(v){return '<option value="'+v+'"'+(o.fulfillment===v?' selected':'')+'>'+FUL[v]+'</option>'}).join('')+'</select>';
+      var em=(names[o.user_id]||{}).email;
+      return '<tr><td>'+fmtDate(o.created_at)+'</td><td>'+esc(nm(o.user_id))+(em?'<br><small class="sub">'+esc(em)+'</small>':'')+'</td><td>'+what+rec+'</td><td>'+money(o.amount)+(o.shipping_fee>0?'<br><small class="sub">含運費 '+money(o.shipping_fee)+'</small>':'')+'</td><td><span class="pill '+(o.status==='paid'?'ok':o.status==='pending'?'warn':'')+'">'+(o.status==='pending'?'未付款':ORD_ST[o.status])+'</span></td><td>'+act+'</td></tr>'}).join('')+(list.length?'':'<tr><td colspan="6" class="none">'+emptyMsg+'</td></tr>')+'</tbody></table></div><p class="mfoot">教材付款成功後會自動列在「準備寄出」。寄出後把右邊改成「已寄出」，訂單會移到「已寄出」分頁；客人收到後改成「已完成」。未付款的訂單可以在「其他」分頁刪除，已付款的訂單不能刪除。</p>';
+    $$('[data-ot]',body).forEach(function(b){b.addEventListener('click',function(){ORD_TAB=b.getAttribute('data-ot');TABS.o(body)})});
     $$('[data-ful]',body).forEach(function(s){s.addEventListener('change',async function(){
       var u=await sb.from('orders').update({fulfillment:s.value}).eq('id',s.getAttribute('data-ful'));
-      if(u.error){toast('更新失敗：'+niceErr(u.error));TABS.o(body)}else{toast('已更新出貨狀態');tiles()}
+      if(u.error){toast('更新失敗：'+niceErr(u.error));TABS.o(body)}else{toast('已更新，訂單移到「'+FUL[s.value]+'」');tiles();TABS.o(body)}
+    })});
+    $$('[data-odel]',body).forEach(function(b){b.addEventListener('click',async function(){
+      if(!b.classList.contains('arm')){b.classList.add('arm');b.textContent='再按一次，確定刪除';clearTimeout(b._t);b._t=setTimeout(function(){b.classList.remove('arm');b.textContent='刪除'},6000);return}
+      clearTimeout(b._t);b.disabled=true;
+      var d=await sb.from('orders').delete().eq('id',b.getAttribute('data-odel')).neq('status','paid').select('id');
+      if(d.error){toast('刪除失敗：'+niceErr(d.error));b.disabled=false;return}
+      if(!d.data||!d.data.length){toast('這筆訂單不能刪除（已付款的訂單要保留）');b.disabled=false;return}
+      toast('已刪除訂單');tiles();TABS.o(body);
     })});
   };
 
@@ -2587,12 +2622,13 @@ function initAdmin(){
     var ids=(chr.data||[]).map(function(x){return x.id});
     var vr=ids.length?await sb.from('chapter_videos').select('chapter_id,youtube_id').in('chapter_id',ids):{data:[]};
     var vm={};(vr.data||[]).forEach(function(x){vm[x.chapter_id]=x.youtube_id});
+    var nr=ids.length?await sb.from('chapter_notes').select('chapter_id,body').in('chapter_id',ids):{data:[]},hasNotes=!nr.error,nm2={};(nr.data||[]).forEach(function(x){nm2[x.chapter_id]=x.body});
     var h='';
     (cr.data||[]).filter(function(c){return c.status!=='removed'}).forEach(function(c){
       var chs=(chr.data||[]).filter(function(x){return x.course_id===c.id});
       h+='<div class="ccfg" data-crow="'+esc(c.id)+'"><div class="ccfg-h"><b>'+esc(c.name)+'</b><label>狀態 <select data-f="status"><option value="draft"'+(c.status==='draft'?' selected':'')+'>籌備中</option><option value="open"'+(c.status==='open'?' selected':'')+'>開放報名</option></select></label><label>優惠價/售價 NT$ <input type="number" min="0" step="10" data-f="price" value="'+c.price+'" style="width:90px"></label><label>原價 NT$ <input type="number" min="1" step="10" data-f="lprice" value="'+(c.list_price==null?'':c.list_price)+'" placeholder="沒有就留空" style="width:100px"></label><button type="button" class="btn btn-line sm" data-csave="'+esc(c.id)+'">儲存</button><button type="button" class="btn btn-line sm pdel" data-cdel="'+esc(c.id)+'">刪除課程</button></div><p class="mfoot" style="margin:0 0 8px">價格填 0 代表免費報名。要顯示「原價劃掉、旁邊是優惠價」，在「原價」填比售價高的金額；不想顯示就留空。</p>'+
-        '<div class="twrap"><table class="tbl"><thead><tr><th>#</th><th>章節</th><th>YouTube 網址或影片代碼</th><th>試看</th><th></th></tr></thead><tbody>'+chs.map(function(ch){
-          return '<tr data-ch="'+ch.id+'"><td>'+(ch.position+1)+'</td><td><input data-f="title" value="'+esc(ch.title)+'" maxlength="80"></td><td><input data-f="yt" value="'+esc(vm[ch.id]||'')+'" placeholder="https://youtu.be/…"></td><td><input type="checkbox" data-f="prev"'+(ch.is_preview?' checked':'')+' aria-label="試看"></td><td><button type="button" class="btn btn-line sm" data-chsave="'+ch.id+'">儲存</button> <button type="button" class="btn btn-line sm pdel" data-chdel="'+ch.id+'">刪除</button></td></tr>'}).join('')+'</tbody></table></div><button type="button" class="btn btn-line sm" data-chadd="'+esc(c.id)+'" style="margin-top:8px">＋ 新增章節</button></div>';
+        '<div class="twrap"><table class="tbl"><thead><tr><th>#</th><th>章節</th><th>YouTube 網址或影片代碼</th>'+(hasNotes?'<th>精華筆記</th>':'')+'<th>試看</th><th></th></tr></thead><tbody>'+chs.map(function(ch){
+          return '<tr data-ch="'+ch.id+'"><td>'+(ch.position+1)+'</td><td><input data-f="title" value="'+esc(ch.title)+'" maxlength="80"></td><td><input data-f="yt" value="'+esc(vm[ch.id]||'')+'" placeholder="https://youtu.be/…"></td>'+(hasNotes?'<td><textarea data-f="notes" rows="3" maxlength="20000" placeholder="貼上這一章的精華筆記，可以換行、分段" aria-label="精華筆記" style="min-width:240px;width:100%">'+esc(nm2[ch.id]||'')+'</textarea></td>':'')+'<td><input type="checkbox" data-f="prev"'+(ch.is_preview?' checked':'')+' aria-label="試看"></td><td><button type="button" class="btn btn-line sm" data-chsave="'+ch.id+'">儲存</button> <button type="button" class="btn btn-line sm pdel" data-chdel="'+ch.id+'">刪除</button></td></tr>'}).join('')+'</tbody></table></div><button type="button" class="btn btn-line sm" data-chadd="'+esc(c.id)+'" style="margin-top:8px">＋ 新增章節</button></div>';
     });
     var newC='<details class="addbox" id="cNewBox"><summary>＋ 新增課程</summary><form id="cNew" novalidate>'+
       '<label class="fld">課程名稱<input type="text" id="cnName" maxlength="40" placeholder="例如：會考作文衝刺班"></label>'+
@@ -2692,7 +2728,11 @@ function initAdmin(){
       var u=await sb.from('course_chapters').update({title:$('[data-f=title]',tr).value.trim()||'未命名章節',is_preview:$('[data-f=prev]',tr).checked}).eq('id',id);
       if(u.error){toast('儲存失敗：'+niceErr(u.error));return}
       var v=yid?await sb.from('chapter_videos').upsert({chapter_id:id,youtube_id:yid},{onConflict:'chapter_id'}):await sb.from('chapter_videos').delete().eq('chapter_id',id);
-      toast(v.error?'影片儲存失敗：'+niceErr(v.error):'已儲存章節');
+      if(v.error){toast('影片儲存失敗：'+niceErr(v.error));return}
+      var ne=$('[data-f=notes]',tr);
+      if(ne){var nv=ne.value.trim();var n2=nv?await sb.from('chapter_notes').upsert({chapter_id:id,body:nv,updated_at:new Date().toISOString()},{onConflict:'chapter_id'}):await sb.from('chapter_notes').delete().eq('chapter_id',id);
+        if(n2.error){toast('精華筆記儲存失敗：'+niceErr(n2.error));return}}
+      toast('已儲存章節');
     })});
     function armDel(b,label,ask){
       if(!b.classList.contains('arm')){
@@ -2944,7 +2984,7 @@ function initAdmin(){
     body.insertAdjacentHTML('beforeend','<h3 style="margin-top:26px">資料備份</h3><div class="bkbox"><p class="mfoot" style="margin:0 0 10px">把網站所有資料表（會員、作文與評語、訂單、課程、直播…）匯出成一個檔案存到你的電腦。建議每月備份一次，出大改動前也先備份。檔案內有學生個資，請存放在安全的地方，不要上傳到公開處。作文與封面的圖片檔本身不在其中，檔案內只有它們的路徑。</p><button type="button" class="btn btn-line" id="bkGo">下載資料備份</button> <span class="mfoot" id="bkMsg" role="status"></span></div>');
     $('#bkGo').addEventListener('click',async function(){
       var bt=this,msg=$('#bkMsg');bt.disabled=true;msg.textContent='備份中…';
-      var TB=['profiles','admin_emails','site_settings','plans','memberships','products','courses','course_chapters','chapter_videos','enrollments','progress','orders','order_items','payments','product_categories','essays','essay_files','essay_plans','essay_purchases','feedback_templates','resources','resource_claims','live_events','live_links','live_views','announcements','contact_messages','ocr_usage'];
+      var TB=['profiles','admin_emails','site_settings','plans','memberships','products','courses','course_chapters','chapter_videos','chapter_notes','enrollments','progress','orders','order_items','payments','product_categories','essays','essay_files','essay_plans','essay_purchases','feedback_templates','resources','resource_claims','live_events','live_links','live_views','announcements','contact_messages','ocr_usage'];
       var out={exported_at:new Date().toISOString(),site:location.host,tables:{},errors:{}},total=0;
       try{
         for(var i=0;i<TB.length;i++){

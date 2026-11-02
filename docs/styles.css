@@ -1481,3 +1481,16 @@ s.lprice{color:var(--text-soft);font-weight:400;font-size:.82em;margin-right:.45
 .rpanel.in{animation:rpanelIn .34s ease both}
 @keyframes rpanelIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.rpanel.in{animation:none}.rtab{transition:none}}
+.nbody{white-space:pre-wrap;word-break:break-word;font-size:15px;line-height:1.9;color:var(--text);padding-top:4px}
+.nnone{padding:8px 0}
+.rtabs.o4{grid-template-columns:repeat(4,minmax(0,1fr));margin:0 0 16px}
+.rtabs.o4 .rtab{min-height:44px;font-size:15px;letter-spacing:.04em;padding:8px 4px}
+.rtabs.o4 .rtab small{font-weight:400;opacity:.8}
+.shipm{border:0;padding:0;margin:2px 0 4px;display:grid;gap:8px}
+.shipm legend{font-size:13.5px;color:var(--text-soft);letter-spacing:.04em;margin-bottom:6px;padding:0}
+.shipopt{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:var(--paper);cursor:pointer;font-size:15px}
+.shipopt.on{border-color:var(--gold, #b8862e);box-shadow:0 0 0 1px var(--gold, #b8862e) inset}
+.shipopt input{width:auto;margin:0;flex:none}
+.shipopt span{flex:1;min-width:0}
+.shipopt em{font-style:normal;font-size:13px;color:var(--text-soft)}
+
