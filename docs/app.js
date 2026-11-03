@@ -2188,9 +2188,9 @@ function initAdmin(){
       var rec=o.kind==='product'?'<details'+(ORD_TAB==='to_ship'?' open':'')+'><summary>收件資料</summary>'+shipInfo(o)+esc(o.recipient_name||'')+'<br>'+esc(o.recipient_phone||'')+'<br>'+esc(o.recipient_address||'')+(o.note?'<br>備註：'+esc(o.note):'')+'</details>':'';
       var act;
       if(ORD_TAB==='other')act=o.status!=='paid'?'<button type="button" class="btn btn-line sm pdel" data-odel="'+o.id+'">刪除</button>':'—';
-      else act='<select data-ful="'+o.id+'" aria-label="出貨狀態">'+['to_ship','shipped','done'].map(function(v){return '<option value="'+v+'"'+(o.fulfillment===v?' selected':'')+'>'+FUL[v]+'</option>'}).join('')+'</select>';
+      else act='<select data-ful="'+o.id+'" aria-label="出貨狀態">'+['to_ship','shipped','done'].map(function(v){return '<option value="'+v+'"'+(o.fulfillment===v?' selected':'')+'>'+FUL[v]+'</option>'}).join('')+'</select>'+(ORD_TAB==='done'?' <button type="button" class="btn btn-line sm pdel" data-odel="'+o.id+'">刪除</button>':'');
       var em=(names[o.user_id]||{}).email;
-      return '<tr><td>'+fmtDate(o.created_at)+'</td><td>'+esc(nm(o.user_id))+(em?'<br><small class="sub">'+esc(em)+'</small>':'')+'</td><td>'+what+rec+'</td><td>'+money(o.amount)+(o.shipping_fee>0?'<br><small class="sub">含運費 '+money(o.shipping_fee)+'</small>':'')+'</td><td><span class="pill '+(o.status==='paid'?'ok':o.status==='pending'?'warn':'')+'">'+(o.status==='pending'?'未付款':ORD_ST[o.status])+'</span></td><td>'+act+'</td></tr>'}).join('')+(list.length?'':'<tr><td colspan="6" class="none">'+emptyMsg+'</td></tr>')+'</tbody></table></div><p class="mfoot">教材付款成功後會自動列在「準備寄出」。寄出後把右邊改成「已寄出」，訂單會移到「已寄出」分頁；客人收到後改成「已完成」。未付款的訂單可以在「其他」分頁刪除，已付款的訂單不能刪除。</p>';
+      return '<tr><td>'+fmtDate(o.created_at)+'</td><td>'+esc(nm(o.user_id))+(em?'<br><small class="sub">'+esc(em)+'</small>':'')+'</td><td>'+what+rec+'</td><td>'+money(o.amount)+(o.shipping_fee>0?'<br><small class="sub">含運費 '+money(o.shipping_fee)+'</small>':'')+'</td><td><span class="pill '+(o.status==='paid'?'ok':o.status==='pending'?'warn':'')+'">'+(o.status==='pending'?'未付款':ORD_ST[o.status])+'</span></td><td>'+act+'</td></tr>'}).join('')+(list.length?'':'<tr><td colspan="6" class="none">'+emptyMsg+'</td></tr>')+'</tbody></table></div><p class="mfoot">教材付款成功後會自動列在「準備寄出」。寄出後把右邊改成「已寄出」，訂單會移到「已寄出」分頁；客人收到後改成「已完成」。「已完成」的訂單和未付款的訂單可以按「刪除」清掉（刪除後無法復原，付款紀錄也會一併移除，建議先到「設定」下載備份）；已付款但還沒完成的訂單不能刪。</p>';
     $$('[data-ot]',body).forEach(function(b){b.addEventListener('click',function(){ORD_TAB=b.getAttribute('data-ot');TABS.o(body)})});
     $$('[data-ful]',body).forEach(function(s){s.addEventListener('change',async function(){
       var u=await sb.from('orders').update({fulfillment:s.value}).eq('id',s.getAttribute('data-ful'));
@@ -2199,9 +2199,9 @@ function initAdmin(){
     $$('[data-odel]',body).forEach(function(b){b.addEventListener('click',async function(){
       if(!b.classList.contains('arm')){b.classList.add('arm');b.textContent='再按一次，確定刪除';clearTimeout(b._t);b._t=setTimeout(function(){b.classList.remove('arm');b.textContent='刪除'},6000);return}
       clearTimeout(b._t);b.disabled=true;
-      var d=await sb.from('orders').delete().eq('id',b.getAttribute('data-odel')).neq('status','paid').select('id');
+      var d=await sb.from('orders').delete().eq('id',b.getAttribute('data-odel')).select('id');
       if(d.error){toast('刪除失敗：'+niceErr(d.error));b.disabled=false;return}
-      if(!d.data||!d.data.length){toast('這筆訂單不能刪除（已付款的訂單要保留）');b.disabled=false;return}
+      if(!d.data||!d.data.length){toast('這筆訂單不能刪除（已付款但還沒完成的訂單要保留）');b.disabled=false;return}
       toast('已刪除訂單');tiles();TABS.o(body);
     })});
   };
