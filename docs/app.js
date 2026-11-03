@@ -1612,6 +1612,19 @@ function initEssay(){
   function drawPay(){
     var pl=planBy(ST.plan);if(!pl){ST.view='level';drawLevel();return}
     var bank=(PUB.bank||'').trim(),amt=money(pl.price);
+    if(PUB.pay){
+      w.innerHTML='<div class="ewz"><button type="button" class="more eback" data-back>← 重新選擇方案</button><h2 class="ewz-t"><span>第三步</span>線上付款</h2>'+
+        '<div class="epay"><div class="epay-sum"><h3>購買方案</h3><dl><dt>方案</dt><dd>'+esc(lvName(pl.level))+'・'+esc(pl.name)+'</dd><dt>可批改次數</dt><dd>'+pl.credits+' 次</dd><dt>應付金額</dt><dd class="amt">'+amt+'</dd></dl></div>'+
+        '<div class="epay-bank"><h3>付款方式</h3><p>可用信用卡、ATM 轉帳或超商代碼繳費，由綠界金流安全處理，本站不會留存你的卡號。</p></div></div>'+
+        '<div class="epay-notes"><h3>付款說明</h3><ol><li>按下「前往付款」會進入綠界付款頁，完成後會自動回到網站。</li><li>付款成功後，系統會自動把批改次數加進你的帳號，不用等老師核對，也不用填寫匯款後五碼。</li><li>回到「作文批改」頁選擇你的方案，就能上傳作文，批改結果會顯示在會員專區。</li>'+(pl.credits>1?'<li>這是 '+pl.credits+' 次方案：之後再上傳作文不用重新付款，系統會自動扣除剩餘次數。</li>':'')+'</ol></div>'+
+        '<div class="eact"><button type="button" class="btn btn-fill" data-gopay>前往付款 '+amt+'</button><span class="err" id="payErr" role="alert"></span></div></div>';
+      $('[data-back]',w).addEventListener('click',function(){ssSet(null);ST.view='plans';draw()});
+      $('[data-gopay]',w).addEventListener('click',function(){
+        if(!U){ssSet(ST.plan);askLogin('登入後才能付款並使用批改方案');return}
+        checkout({type:'essay',plan:ST.plan},this,$('#payErr'));
+      });
+      return;
+    }
     w.innerHTML='<div class="ewz"><button type="button" class="more eback" data-back>← 重新選擇方案</button><h2 class="ewz-t"><span>第三步</span>匯款付款</h2>'+
       '<div class="epay"><div class="epay-sum"><h3>購買方案</h3><dl><dt>方案</dt><dd>'+esc(lvName(pl.level))+'・'+esc(pl.name)+'</dd><dt>可批改次數</dt><dd>'+pl.credits+' 次</dd><dt>應付金額</dt><dd class="amt">'+amt+'</dd></dl></div>'+
       '<div class="epay-bank"><h3>匯款資訊</h3>'+(bank?'<pre>'+esc(bank)+'</pre>':'<p>匯款帳戶資訊準備中，請先<a href="contact.html" style="text-decoration:underline">聯絡老師</a>取得匯款資訊。</p>')+'</div></div>'+
@@ -1639,7 +1652,7 @@ function initEssay(){
     p.innerHTML='<button type="button" class="more eback" data-back>← 回方案選擇</button><div class="epbar"><b>'+esc(L.name)+'・'+esc(pu.plan_name)+'</b><span>剩餘 <strong>'+left(pu)+'</strong> / '+pu.credits_total+' 次 '+payPill(pu)+'</span></div>'+
      '<h3>上傳作文</h3><p class="lead">上傳的作文僅供本人與老師查看。'+(pu.level==='senior'?'高中國寫每次批改，請一次上傳知性題與情意題各 1 篇。':'')+'</p>'+
      '<form id="upForm" novalidate><div class="row2"><label class="fld" for="upTitle">作文題目<input id="upTitle" placeholder="例如：溫暖的心" maxlength="60"></label><label class="fld" for="upGrade">年級<select id="upGrade">'+L.grades.map(function(g){return '<option>'+g+'</option>'}).join('')+'</select></label></div>'+
-     (pu.pay_code?'<p class="epaid">已登記轉帳後五碼/優惠碼：<b>'+esc(pu.pay_code)+'</b></p>':'<label class="fld" for="upCode">轉帳帳號後五碼或優惠碼（必填）<input id="upCode" maxlength="30" autocomplete="off" placeholder="例如：12345，或你的優惠碼"></label>')+
+     (pu.pay_code&&/^ECPAY-/.test(pu.pay_code)?'<p class="epaid">已線上付款（綠界），不需要再填寫匯款資料。</p>':pu.pay_code?'<p class="epaid">已登記轉帳後五碼/優惠碼：<b>'+esc(pu.pay_code)+'</b></p>':'<label class="fld" for="upCode">轉帳帳號後五碼或優惠碼（必填）<input id="upCode" maxlength="30" autocomplete="off" placeholder="例如：12345，或你的優惠碼"></label>')+
      '<div class="upz"><h4 class="upz-t"><span>1</span>題目上傳區<em>必填</em></h4><p class="upz-d">拍下這次的作文題目（題目紙或題目頁），老師會對照題目批改。最多 '+MAXP+' 張。</p>'+
      '<label class="drop" id="pdrop" for="upPFile">'+ico('i-upload')+'<span><b>點選選擇題目照片</b>，或把照片拖曳到這裡</span><input id="upPFile" type="file" accept="image/jpeg,image/png,image/webp" multiple></label><div class="thumbs" id="pthumbs"></div></div>'+
      '<div class="upz"><h4 class="upz-t"><span>2</span>作文上傳區<em>必填</em></h4><p class="upz-d">拍下手寫作文，依頁碼順序上傳。最多 '+MAXF+' 張・每張 '+MAXMB+' MB 以內・JPG / PNG / WebP。</p>'+
@@ -1831,7 +1844,7 @@ function initMember(){
     if(o&&o.status==='paid'){
       await loadMine();
       if(o.kind==='product'){S.cart={};save();refreshBadge();syncAddBtns()}
-      payMsg='<div class="paynote ok" role="status">付款成功！'+(o.kind==='membership'?'已自動開通付費會員，可以到直播專區收看。':o.kind==='course'?'課程已開通，可到「我的課程」進入學習。':'我們會盡快寄出教材，出貨進度可在下方訂單查看。')+'</div>';
+      payMsg='<div class="paynote ok" role="status">付款成功！'+(o.kind==='membership'?'已自動開通付費會員，可以到直播專區收看。':o.kind==='course'?'課程已開通，可到「我的課程」進入學習。':o.kind==='essay'?'作文批改方案已加入你的帳號，請到<a href="essay.html" style="text-decoration:underline">作文批改</a>頁選擇方案並上傳作文。':'我們會盡快寄出教材，出貨進度可在下方訂單查看。')+'</div>';
     }else if(o&&(o.status==='failed'||o.status==='cancelled')){
       payMsg='<div class="paynote bad" role="status">付款沒有成功，你可以回到網站重新下單。如有疑問請聯繫我們。</div>';
     }else{
@@ -1872,10 +1885,12 @@ function initMember(){
       var rs=Object.keys(CLAIMED).map(function(id){var r=PUB.resources[id];return r?'<li><span>'+esc(r.name)+'</span><em><button type="button" class="more" data-dl="'+esc(id)+'">下載</button></em></li>':''}).join('')||'<li class="none">尚未領取資源。<a href="resources.html" style="text-decoration:underline;margin-left:6px">免費資源</a></li>';
       body='<h2>我的資源</h2><ul class="mlist">'+rs+'</ul>';
     }else if(tab==='o'){
-      var r=await sb.from('orders').select('id,merchant_trade_no,kind,status,amount,plan_id,course_id,fulfillment,created_at,order_items(name,qty)').eq('user_id',U.id).order('created_at',{ascending:false});
+      var r=await sb.from('orders').select('id,merchant_trade_no,kind,status,amount,plan_id,course_id,essay_plan_id,fulfillment,created_at,order_items(name,qty)').eq('user_id',U.id).order('created_at',{ascending:false});
+      if(r.error)r=await sb.from('orders').select('id,merchant_trade_no,kind,status,amount,plan_id,course_id,fulfillment,created_at,order_items(name,qty)').eq('user_id',U.id).order('created_at',{ascending:false});
+      var epm={};try{var epq=await sb.from('essay_plans').select('id,level,name');(epq.data||[]).forEach(function(x){epm[x.id]=x})}catch(_){}
       if(my!==rendering)return;
       body='<h2>我的訂單</h2><ul class="mlist">'+((r.data||[]).map(function(o){
-        var what=o.kind==='product'?(o.order_items||[]).map(function(i){return esc(i.name)+' × '+i.qty}).join('、'):o.kind==='membership'?'付費會員（'+esc(planName(o.plan_id))+'）':esc((byId(GW.courses,o.course_id)||{}).name||'線上課程');
+        var what=o.kind==='product'?(o.order_items||[]).map(function(i){return esc(i.name)+' × '+i.qty}).join('、'):o.kind==='membership'?'付費會員（'+esc(planName(o.plan_id))+'）':o.kind==='essay'?'作文批改・'+esc(epm[o.essay_plan_id]?(ELV[epm[o.essay_plan_id].level]||{name:''}).name+' '+epm[o.essay_plan_id].name:'批改方案'):esc((byId(GW.courses,o.course_id)||{}).name||'線上課程');
         var ful=o.kind==='product'&&o.status==='paid'&&FUL[o.fulfillment]?'・'+FUL[o.fulfillment]:'';
         return '<li class="col"><div class="l1"><span>'+what+'</span><em>'+ORD_ST[o.status]+ful+'</em></div><small class="sub">'+fmtDate(o.created_at)+'・'+money(o.amount)+'・訂單 '+esc(o.merchant_trade_no)+'</small></li>'}).join('')||'<li class="none">還沒有訂單。</li>')+'</ul>';
     }else{
@@ -2169,8 +2184,9 @@ function initAdmin(){
   TABS.o=async function(body){
     await loadNames();
     var cols='id,merchant_trade_no,user_id,kind,status,amount,plan_id,course_id,recipient_name,recipient_phone,recipient_address,note,fulfillment,created_at,order_items(name,qty)';
-    var r=await sb.from('orders').select(cols+',ship_method,shipping_fee,cvs_store_name,cvs_store_id').order('created_at',{ascending:false}).limit(300);
+    var r=await sb.from('orders').select(cols+',ship_method,shipping_fee,cvs_store_name,cvs_store_id,essay_plan_id').order('created_at',{ascending:false}).limit(300);
     if(r.error)r=await sb.from('orders').select(cols).order('created_at',{ascending:false}).limit(300);
+    var epm={};try{var epq=await sb.from('essay_plans').select('id,level,name');(epq.data||[]).forEach(function(x){epm[x.id]=x})}catch(_){}
     var rows=r.data||[];
     function grp(o){return o.kind==='product'&&o.status==='paid'?(o.fulfillment==='shipped'?'shipped':o.fulfillment==='done'?'done':'to_ship'):'other'}
     var OT=[['to_ship','準備寄出'],['shipped','已寄出'],['done','已完成'],['other','其他']],cnt={};
@@ -2184,7 +2200,7 @@ function initAdmin(){
     var tabsH='<div class="rtabs o4" role="tablist" aria-label="訂單分類">'+OT.map(function(t){var on=t[0]===ORD_TAB;return '<button type="button" role="tab" class="rtab" data-ot="'+t[0]+'" aria-selected="'+on+'">'+t[1]+' <small>('+cnt[t[0]]+')</small></button>'}).join('')+'</div>';
     var emptyMsg={to_ship:'目前沒有準備寄出的訂單',shipped:'目前沒有已寄出的訂單',done:'目前沒有已完成的訂單',other:'沒有其他訂單'}[ORD_TAB];
     body.innerHTML=tabsH+'<div class="twrap"><table class="tbl"><thead><tr><th>日期</th><th>會員</th><th>內容</th><th>金額</th><th>付款</th><th>'+(ORD_TAB==='other'?'操作':'出貨')+'</th></tr></thead><tbody>'+list.map(function(o){
-      var what=o.kind==='product'?(o.order_items||[]).map(function(i){return esc(i.name)+' × '+i.qty}).join('<br>'):o.kind==='membership'?'付費會員（'+esc(planName(o.plan_id))+'）':esc((byId(GW.courses,o.course_id)||{}).name||'線上課程');
+      var what=o.kind==='product'?(o.order_items||[]).map(function(i){return esc(i.name)+' × '+i.qty}).join('<br>'):o.kind==='membership'?'付費會員（'+esc(planName(o.plan_id))+'）':o.kind==='essay'?'作文批改・'+esc(epm[o.essay_plan_id]?lvLabel(epm[o.essay_plan_id].level)+' '+epm[o.essay_plan_id].name:'批改方案'):esc((byId(GW.courses,o.course_id)||{}).name||'線上課程');
       var rec=o.kind==='product'?'<details'+(ORD_TAB==='to_ship'?' open':'')+'><summary>收件資料</summary>'+shipInfo(o)+esc(o.recipient_name||'')+'<br>'+esc(o.recipient_phone||'')+'<br>'+esc(o.recipient_address||'')+(o.note?'<br>備註：'+esc(o.note):'')+'</details>':'';
       var act;
       if(ORD_TAB==='other')act=o.status!=='paid'?'<button type="button" class="btn btn-line sm pdel" data-odel="'+o.id+'">刪除</button>':'—';
@@ -2933,7 +2949,7 @@ function initAdmin(){
     var pend=rows.filter(function(x){return rank(x)===0}).length;
     function who(id){var n=names[id];return n?esc(n.name||'')+(n.email?'<br><small>'+esc(n.email)+'</small>':''):'（未知）'}
     function st(x){return x.status==='confirmed'?'<span class="pill ok">已確認收款</span>':x.status==='cancelled'?'<span class="pill">已取消</span>':(x.pay_code||x.credits_used)?'<span class="pill warn">待核對</span>':'<span class="pill">尚未回報匯款</span>'}
-    var h='<h3>作文批改方案</h3><p class="lead" style="font-size:14px">學生選好方案後會出現在這裡。對照匯款的「後五碼」或優惠碼，確認收到款項後按「確認收款」。10 篇方案的剩餘次數也在這裡看，上傳作文時系統會自動扣除。</p>'+
+    var h='<h3>作文批改方案</h3><p class="lead" style="font-size:14px">學生選好方案後會出現在這裡。對照匯款的「後五碼」或優惠碼，確認收到款項後按「確認收款」。10 篇方案的剩餘次數也在這裡看，上傳作文時系統會自動扣除。用綠界線上付款的會自動變成「已確認收款」（後五碼欄顯示 ECPAY 開頭的訂單編號），不用對帳。</p>'+
       '<div class="twrap"><table class="tbl"><thead><tr><th>學生</th><th>方案</th><th>金額</th><th>後五碼/優惠碼</th><th>剩餘次數</th><th>狀態</th><th>日期</th><th></th></tr></thead><tbody>'+
       (rows.map(function(x){
         return '<tr data-pp="'+esc(x.id)+'"><td>'+who(x.user_id)+'</td><td>'+esc(lvLabel(x.level))+'<br><small>'+esc(x.plan_name)+'</small></td><td>NT$'+(+x.amount).toLocaleString('en-US')+'</td><td><b>'+esc(x.pay_code||'—')+'</b></td>'+
