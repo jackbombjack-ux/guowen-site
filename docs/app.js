@@ -1509,9 +1509,9 @@ function scoreLinesHtml(e){
 function dateShort(t){var d=new Date(t);return (d.getMonth()+1)+'/'+d.getDate()}
 
 var ELV={
-  elem:{name:'國小作文',sub:'國小三~六年級',grades:['國小三年級','國小四年級','國小五年級','國小六年級'],img:'images/essay-elem.jpg',alt:'國小作文成長精批方案：單篇精批與 10 篇成長方案',hot:[[6.8,48,42.4,43],[50.6,48,44.3,43]]},
-  junior:{name:'國中作文',sub:'國一~國三・會考作文',grades:['國一','國二','國三'],img:'images/essay-junior.jpg',alt:'國中作文專業精批服務：單篇精批與 10 篇會考作文精批方案',hot:[[6.8,47,42.4,44],[50.8,48,44.1,43]]},
-  senior:{name:'高中國寫',sub:'高一~高三・學測國寫',grades:['高一','高二','高三'],img:'images/essay-senior.jpg',alt:'高中國寫專業精批服務：單次精批與學測國寫精批方案',hot:[[9,48.8,39.8,40.5],[50.6,48.8,44.1,40.5]]}
+  elem:{name:'國小作文',sub:'國小三~六年級',grades:['國小三年級','國小四年級','國小五年級','國小六年級'],img:'images/essay-elem.jpg',alt:'國小作文成長精批方案：單篇精批與 10 篇成長方案',hot:[[6.3,48,43.1,42.4],[50.6,48,44.6,43]]},
+  junior:{name:'國中作文',sub:'國一~國三・會考作文',grades:['國一','國二','國三'],img:'images/essay-junior.jpg',alt:'國中作文專業精批服務：單篇精批與 10 篇會考作文精批方案',hot:[[6.3,47,43.1,43.6],[50.6,47,44.5,44]]},
+  senior:{name:'高中國寫',sub:'高一~高三・學測國寫',grades:['高一','高二','高三'],img:'images/essay-senior.jpg',alt:'高中國寫專業精批服務：單次精批與學測國寫精批方案',hot:[[6.2,48.6,42.8,40.8],[50.4,48.6,44.6,40.4]]}
 };
 var ESS_KEY='gw-essay-plan';
 function initEssay(){
