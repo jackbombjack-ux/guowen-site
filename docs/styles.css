@@ -1494,3 +1494,7 @@ s.lprice{color:var(--text-soft);font-weight:400;font-size:.82em;margin-right:.45
 .shipopt span{flex:1;min-width:0}
 .shipopt em{font-style:normal;font-size:13px;color:var(--text-soft)}
 
+/* 精華筆記分頁:切到筆記時隱藏章節清單,筆記在面板內自己捲動 */
+.chaps[hidden],.subs[hidden]{display:none}
+.subs{overflow:auto;flex:1;min-height:0}
+.lp-grid .subs{max-height:520px}
