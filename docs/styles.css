@@ -1498,3 +1498,12 @@ s.lprice{color:var(--text-soft);font-weight:400;font-size:.82em;margin-right:.45
 .chaps[hidden],.subs[hidden]{display:none}
 .subs{overflow:auto;flex:1;min-height:0}
 .lp-grid .subs{max-height:520px}
+
+/* 教材「試閱」按鈕:有檔案可下載;沒檔案時灰色不可點 */
+.btn-sample{text-decoration:none}
+.btn-sample[disabled],.btn-sample[disabled]:hover{background:#e4e2de;border-color:#cdcac4;color:#7d7a74;cursor:not-allowed;opacity:1;transform:none;box-shadow:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn-sample[disabled],:root:not([data-theme="light"]) .btn-sample[disabled]:hover{background:#3a3835;border-color:#4a4743;color:#9a968f}}
+:root[data-theme="dark"] .btn-sample[disabled],:root[data-theme="dark"] .btn-sample[disabled]:hover{background:#3a3835;border-color:#4a4743;color:#9a968f}
+.psamp{white-space:normal;min-width:150px}
+.psamp .sstat{display:block;font-size:.85rem;margin-bottom:6px;color:var(--text-soft)}
+.psamp .sfile{cursor:pointer}

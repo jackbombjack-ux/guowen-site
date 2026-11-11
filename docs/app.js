@@ -621,6 +621,28 @@ function mediaUrl(p){
   if(/^(images\/|https?:)/.test(p))return p;
   return String((GW.config&&GW.config.supabaseUrl)||'').replace(/\/$/,'')+'/storage/v1/object/public/product-media/'+String(p).split('/').map(encodeURIComponent).join('/');
 }
+function sampleUrl(p,name){
+  return String((GW.config&&GW.config.supabaseUrl)||'').replace(/\/$/,'')+'/storage/v1/object/public/product-samples/'+String(p).split('/').map(encodeURIComponent).join('/')+(name?'?download='+encodeURIComponent(name):'');
+}
+/* 教材購買頁的「試閱」按鈕：有上傳試閱檔就可下載，沒有就灰色不可點 */
+function applySamples(){
+  $$('.pd-actions').forEach(function(box){
+    var b0=$('[data-add]',box);if(!b0)return;
+    var id=b0.getAttribute('data-add'),r=PUB.products[id];
+    if(!r||id==='__ID__')return;
+    $$('.btn-sample',box).forEach(function(x){x.parentNode.removeChild(x)});
+    var g=byId(GW.products,id)||{},el;
+    if(r.sample_path){
+      el=document.createElement('a');el.href=sampleUrl(r.sample_path,(g.name||r.name||'教材')+'_試閱.pdf');
+      el.setAttribute('download','');el.setAttribute('rel','noopener');el.setAttribute('title','下載試閱檔（PDF）');
+    }else{
+      el=document.createElement('button');el.type='button';el.disabled=true;
+      el.setAttribute('aria-disabled','true');el.setAttribute('title','試閱檔案準備中');
+    }
+    el.className='btn btn-line btn-sample';el.setAttribute('data-sample',id);el.textContent='試閱';
+    box.appendChild(el);
+  });
+}
 function galHtml(items){
   return items.map(function(it){var u=mediaUrl(it.src||it.path),c=it.cap||'';
     return '<figure><img src="'+esc(u)+'" alt="'+esc(c)+'" loading="lazy">'+(c?'<figcaption>'+esc(c)+'</figcaption>':'')+'</figure>'}).join('');
@@ -682,6 +704,7 @@ function applyCourseContent(){
   });
 }
 function applyProductContent(){
+  applySamples();
   Object.keys(PUB.products).forEach(function(id){
     var r=PUB.products[id],g=byId(GW.products,id),e;
     if(r.cover_path){
@@ -890,7 +913,7 @@ async function selRes(){
 async function loadPublic(){
   try{
     var rs=await Promise.all([
-      selFb('products','id,name,title,price,list_price,removed,active,kind,sort,meta,tagline,category_id,cover_path,intro,feats,toc,gallery',['id,name,title,price,active,kind,sort,meta,tagline,category_id,cover_path,intro,feats,toc,gallery','id,name,title,price,active,kind,sort,meta,tagline,cover_path,intro,feats,toc,gallery','id,price,active,kind,cover_path,intro,feats,toc,gallery'],'sort'),
+      selFb('products','id,name,title,price,list_price,removed,active,kind,sort,meta,tagline,category_id,cover_path,intro,feats,toc,gallery,sample_path',['id,name,title,price,list_price,removed,active,kind,sort,meta,tagline,category_id,cover_path,intro,feats,toc,gallery','id,name,title,price,active,kind,sort,meta,tagline,category_id,cover_path,intro,feats,toc,gallery','id,name,title,price,active,kind,sort,meta,tagline,cover_path,intro,feats,toc,gallery','id,price,active,kind,cover_path,intro,feats,toc,gallery'],'sort'),
       selFb('courses','id,name,price,list_price,status,sort,intro,tagline,audience,cover_path,materials',['id,name,price,status,sort,intro,tagline,audience,cover_path,materials','id,name,price,status,sort,intro,tagline,audience,cover_path','id,price,status'],'sort'),
       sb.from('plans').select('id,name,amount,period_type,frequency,active'),sb.from('site_settings').select('key,value'),
       selRes(),sb.from('course_chapters').select('course_id,position,title').order('position'),sb.from('product_categories').select('id,name,subtitle,sort').order('sort')]);
@@ -2324,6 +2347,11 @@ function initAdmin(){
       '<p class="mfoot" style="margin:0 0 10px">教材列表會依專區分區顯示。可以新增專區、改名、調整順序；把教材放進哪個專區，在下方表格的「專區」欄選。刪除專區不會刪掉教材，教材會變成「未分類」（顯示在最後的「其他教材」）。</p>'+
       '<div id="catList">'+cats.map(function(c,i){return '<div class="catrow" data-cat="'+esc(c.id)+'"><input type="text" data-cf="name" value="'+esc(c.name)+'" maxlength="20" aria-label="專區名稱"><input type="text" data-cf="sub" value="'+esc(c.subtitle||'')+'" maxlength="60" placeholder="專區說明（可留空）" aria-label="專區說明"><span class="catact"><button type="button" class="btn btn-line sm" data-cup'+(i===0?' disabled':'')+' aria-label="上移">↑</button><button type="button" class="btn btn-line sm" data-cdn'+(i===cats.length-1?' disabled':'')+' aria-label="下移">↓</button><button type="button" class="btn btn-line sm" data-csv>儲存</button><button type="button" class="btn btn-line sm" data-cdel>刪除</button></span></div>'}).join('')+(cats.length?'':'<p class="mfoot">還沒有專區。</p>')+'</div>'+
       '<form id="catNew" class="catrow" novalidate><input type="text" id="catnName" maxlength="20" placeholder="新專區名稱，例如：國小" aria-label="新專區名稱"><input type="text" id="catnSub" maxlength="60" placeholder="專區說明（可留空）" aria-label="新專區說明"><span class="catact"><button type="submit" class="btn btn-fill sm">＋ 新增專區</button></span></form></details>';
+    function sampCell(p){
+      return '<span class="sstat">'+(p.sample_path?'已上傳 · <a href="'+esc(sampleUrl(p.sample_path))+'" target="_blank" rel="noopener">預覽</a>':'尚未上傳')+'</span>'+
+        '<label class="btn btn-line sm sfile">'+(p.sample_path?'更換 PDF':'上傳 PDF')+'<input type="file" accept="application/pdf,.pdf" data-sfile="'+esc(p.id)+'" hidden></label>'+
+        (p.sample_path?' <button type="button" class="btn btn-line sm" data-sdel="'+esc(p.id)+'">移除</button>':'');
+    }
     var newForm='<details class="addbox" id="pNewBox"><summary>＋ 新增教材</summary><form id="pNew" novalidate>'+
       '<label class="fld">書名（顯示在教材卡片與購物車）<input type="text" id="pnName" maxlength="40" placeholder="例如：國文學霸筆記・續集"></label>'+
       '<label class="fld">完整書名（教材頁大標題，可留空沿用書名）<input type="text" id="pnTitle" maxlength="60"></label>'+
@@ -2332,9 +2360,9 @@ function initAdmin(){
       '<label class="fld">分類說明（卡片上的小字）<input type="text" id="pnMeta" maxlength="80" placeholder="例如：寫作素材・內文約 146 頁"></label>'+
       '<label class="fld">一句話標語<input type="text" id="pnTag" maxlength="120"></label>'+
       '<button type="submit" class="btn btn-fill sm">建立教材</button> <span class="mfoot">建立後先是「未上架」，只有你看得到；補完封面、簡介、目錄，再勾選「上架」並按儲存，前台就會出現。</span></form></details>';
-    body.innerHTML=catBox+newForm+'<div class="twrap"><table class="tbl"><thead><tr><th>教材</th><th>優惠價/售價（NT$）</th><th>原價（NT$，選填）</th><th>類型</th>'+(catOk?'<th>專區</th>':'')+'<th>上架</th><th></th></tr></thead><tbody>'+rows.filter(function(p){return !p.removed}).map(function(p){
-      return '<tr data-prow="'+esc(p.id)+'"><td>'+esc(p.name)+'</td><td><input type="number" min="0" step="10" value="'+p.price+'" data-f="price" style="width:90px"></td><td><input type="number" min="1" step="10" value="'+(p.list_price==null?'':p.list_price)+'" data-f="lprice" placeholder="沒有就留空" style="width:100px" aria-label="原價"></td><td><select data-f="kind"><option value="physical"'+(p.kind==='physical'?' selected':'')+'>實體書（需寄送）</option><option value="digital"'+(p.kind==='digital'?' selected':'')+'>電子檔</option></select></td>'+(catOk?'<td><select data-f="cat">'+catOpts(p.category_id||'')+'</select></td>':'')+'<td><input type="checkbox" data-f="active"'+(p.active?' checked':'')+' aria-label="上架"></td><td class="pact2"><button type="button" class="btn btn-line sm" data-save="'+esc(p.id)+'">儲存</button> <button type="button" class="btn btn-line sm" data-edit="'+esc(p.id)+'" aria-expanded="false">編輯內容與圖片</button>'+' <button type="button" class="btn btn-line sm pdel" data-pdel="'+esc(p.id)+'">刪除</button></td></tr>'+
-        '<tr data-erow="'+esc(p.id)+'" hidden><td colspan="8"></td></tr>'}).join('')+'</tbody></table></div>'+(rows.some(function(p){return p.removed})?'<details class="addbox" id="pGone"><summary>已刪除的教材（'+rows.filter(function(p){return p.removed}).length+'）</summary><ul class="mlist">'+rows.filter(function(p){return p.removed}).map(function(p){return '<li><span><b>'+esc(p.name)+'</b></span><button type="button" class="btn btn-line sm" data-prest="'+esc(p.id)+'">還原</button></li>'}).join('')+'</ul></details>':'')+'<p class="mfoot">價格會立刻套用到網站與結帳。要顯示「原價劃掉、旁邊是優惠價」，在「原價」填比售價高的金額；不想顯示就留空。已付款的舊訂單金額不受影響。「編輯內容與圖片」可以自己換封面、改簡介、特色與目錄，以及上傳內頁圖。按「刪除」後前台就看不到這本教材；已經有訂單的教材會保留紀錄，可以在下方「已刪除的教材」還原。</p>';
+    body.innerHTML=catBox+newForm+'<div class="twrap"><table class="tbl"><thead><tr><th>教材</th><th>優惠價/售價（NT$）</th><th>原價（NT$，選填）</th><th>類型</th>'+(catOk?'<th>專區</th>':'')+'<th>上架</th><th>試閱檔案（PDF）</th><th></th></tr></thead><tbody>'+rows.filter(function(p){return !p.removed}).map(function(p){
+      return '<tr data-prow="'+esc(p.id)+'"><td>'+esc(p.name)+'</td><td><input type="number" min="0" step="10" value="'+p.price+'" data-f="price" style="width:90px"></td><td><input type="number" min="1" step="10" value="'+(p.list_price==null?'':p.list_price)+'" data-f="lprice" placeholder="沒有就留空" style="width:100px" aria-label="原價"></td><td><select data-f="kind"><option value="physical"'+(p.kind==='physical'?' selected':'')+'>實體書（需寄送）</option><option value="digital"'+(p.kind==='digital'?' selected':'')+'>電子檔</option></select></td>'+(catOk?'<td><select data-f="cat">'+catOpts(p.category_id||'')+'</select></td>':'')+'<td><input type="checkbox" data-f="active"'+(p.active?' checked':'')+' aria-label="上架"></td><td class="psamp" data-samp="'+esc(p.id)+'">'+sampCell(p)+'</td><td class="pact2"><button type="button" class="btn btn-line sm" data-save="'+esc(p.id)+'">儲存</button> <button type="button" class="btn btn-line sm" data-edit="'+esc(p.id)+'" aria-expanded="false">編輯內容與圖片</button>'+' <button type="button" class="btn btn-line sm pdel" data-pdel="'+esc(p.id)+'">刪除</button></td></tr>'+
+        '<tr data-erow="'+esc(p.id)+'" hidden><td colspan="9"></td></tr>'}).join('')+'</tbody></table></div>'+(rows.some(function(p){return p.removed})?'<details class="addbox" id="pGone"><summary>已刪除的教材（'+rows.filter(function(p){return p.removed}).length+'）</summary><ul class="mlist">'+rows.filter(function(p){return p.removed}).map(function(p){return '<li><span><b>'+esc(p.name)+'</b></span><button type="button" class="btn btn-line sm" data-prest="'+esc(p.id)+'">還原</button></li>'}).join('')+'</ul></details>':'')+'<p class="mfoot">價格會立刻套用到網站與結帳。要顯示「原價劃掉、旁邊是優惠價」，在「原價」填比售價高的金額；不想顯示就留空。已付款的舊訂單金額不受影響。「編輯內容與圖片」可以自己換封面、改簡介、特色與目錄，以及上傳內頁圖。按「刪除」後前台就看不到這本教材；已經有訂單的教材會保留紀錄，可以在下方「已刪除的教材」還原。</p>';
     if(catOk){
       var cnf=$('#catNew',body);
       cnf.addEventListener('submit',async function(ev){
@@ -2414,6 +2442,7 @@ function initAdmin(){
         }
         var paths=[r0.cover_path].concat((Array.isArray(r0.gallery)?r0.gallery:[]).map(function(x){return x&&x.path})).filter(Boolean);
         if(paths.length){try{await sb.storage.from('product-media').remove(paths)}catch(_){}}
+        if(r0.sample_path){try{await sb.storage.from('product-samples').remove([r0.sample_path])}catch(_){}}
         delete PUB.products[id];var gi=GW.products.map(function(x){return x.id}).indexOf(id);if(gi>=0)GW.products.splice(gi,1);
         toast('已刪除教材');await TABS.p(body);
       });
@@ -2434,6 +2463,42 @@ function initAdmin(){
       if(!u.error){var gp=byId(GW.products,b.getAttribute('data-save'));if(gp){gp.price=price;gp.list_price=lpn}}
       toast(u.error?'儲存失敗：'+niceErr(u.error):'已儲存');
     })});
+    function sampRefresh(id){
+      var r0=rows.filter(function(x){return x.id===id})[0]||{},td=$('[data-samp="'+id+'"]',body);
+      if(td){td.innerHTML=sampCell(r0);sampBind(td)}
+    }
+    function sampBind(td){
+      var inp=$('[data-sfile]',td),del=$('[data-sdel]',td);
+      if(inp)inp.addEventListener('change',async function(){
+        var id=inp.getAttribute('data-sfile'),f=inp.files&&inp.files[0];
+        if(!f)return;
+        if(!(f.type==='application/pdf'||/\.pdf$/i.test(f.name))){inp.value='';toast('試閱檔請選 PDF 檔案');return}
+        if(f.size>30*1024*1024){inp.value='';toast('檔案太大（上限 30MB），請先壓縮再上傳');return}
+        var r0=rows.filter(function(x){return x.id===id})[0]||{},old=r0.sample_path||null;
+        var st=$('.sstat',td);if(st)st.textContent='上傳中…';
+        inp.disabled=true;if(del)del.disabled=true;
+        var pth=id+'/sample-'+Date.now().toString(36)+'.pdf';
+        var up=await sb.storage.from('product-samples').upload(pth,f,{contentType:'application/pdf',upsert:false});
+        if(up.error){toast('上傳失敗：'+niceErr(up.error));sampRefresh(id);return}
+        var u=await sb.from('products').update({sample_path:pth}).eq('id',id);
+        if(u.error){try{await sb.storage.from('product-samples').remove([pth])}catch(_){}toast('儲存失敗：'+niceErr(u.error));sampRefresh(id);return}
+        if(old){try{await sb.storage.from('product-samples').remove([old])}catch(_){}}
+        r0.sample_path=pth;if(PUB.products[id])PUB.products[id].sample_path=pth;
+        sampRefresh(id);toast(old?'已更換試閱檔，前台「試閱」按鈕會下載新檔案':'已上傳試閱檔，前台「試閱」按鈕已開放下載');
+      });
+      if(del)del.addEventListener('click',async function(){
+        var id=del.getAttribute('data-sdel'),r0=rows.filter(function(x){return x.id===id})[0]||{},old=r0.sample_path;
+        if(!old)return;
+        if(!del.classList.contains('arm')){del.classList.add('arm');del.textContent='再按一次確認移除';setTimeout(function(){del.classList.remove('arm');del.textContent='移除'},5000);return}
+        del.disabled=true;
+        var u=await sb.from('products').update({sample_path:null}).eq('id',id);
+        if(u.error){del.disabled=false;toast('移除失敗：'+niceErr(u.error));return}
+        try{await sb.storage.from('product-samples').remove([old])}catch(_){}
+        r0.sample_path=null;if(PUB.products[id])PUB.products[id].sample_path=null;
+        sampRefresh(id);toast('已移除試閱檔，前台「試閱」按鈕會變回灰色');
+      });
+    }
+    $$('[data-samp]',body).forEach(sampBind);
     $$('[data-edit]',body).forEach(function(b){b.addEventListener('click',function(){
       var id=b.getAttribute('data-edit'),er=$('[data-erow="'+id+'"]',body),open=er.hidden;
       er.hidden=!open;b.setAttribute('aria-expanded',String(open));
