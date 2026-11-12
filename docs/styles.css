@@ -1507,3 +1507,9 @@ s.lprice{color:var(--text-soft);font-weight:400;font-size:.82em;margin-right:.45
 .psamp{white-space:normal;min-width:150px}
 .psamp .sstat{display:block;font-size:.85rem;margin-bottom:6px;color:var(--text-soft)}
 .psamp .sfile{cursor:pointer}
+
+/* 教材卡片底部:價格含劃線原價時很長,按鈕不可擠成兩行;放不下就整排按鈕換到下一行靠右 */
+.prow{flex-wrap:wrap;gap:6px 10px}
+.prow .price{white-space:nowrap}
+.prow .pact{flex-shrink:0;margin-left:auto}
+.prow .pact .btn{white-space:nowrap}
