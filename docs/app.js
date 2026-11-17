@@ -527,6 +527,49 @@ function postForm(url,fields){
   Object.keys(fields).forEach(function(k){var i=document.createElement('input');i.type='hidden';i.name=k;i.value=fields[k];f.appendChild(i)});
   document.body.appendChild(f);f.submit();
 }
+/* ---------- PayPal（教材購物車） ---------- */
+var PP_LOAD=null;
+function ppReady(){return !!(PUB.pay&&PUB.ppOn&&/^[A-Za-z0-9_-]{20,120}$/.test(PUB.ppId||''))}
+function loadPaypalSdk(clientId){
+  if(window.paypal&&window.paypal.Buttons)return Promise.resolve(window.paypal);
+  if(PP_LOAD)return PP_LOAD;
+  PP_LOAD=new Promise(function(res,rej){
+    var sc=document.createElement('script');
+    sc.src='https://www.paypal.com/sdk/js?client-id='+encodeURIComponent(clientId)+'&currency=TWD&intent=capture&components=buttons&locale=zh_TW';
+    sc.onload=function(){if(window.paypal&&window.paypal.Buttons)res(window.paypal);else{PP_LOAD=null;rej(new Error('paypal'))}};
+    sc.onerror=function(){PP_LOAD=null;rej(new Error('paypal'))};
+    document.head.appendChild(sc);
+  });
+  return PP_LOAD;
+}
+/* getPayload() 驗證收件資料並回傳訂單內容（不合格回 null）；setErr 顯示錯誤文字 */
+function mountPaypal(box,getPayload,setErr){
+  loadPaypalSdk(PUB.ppId).then(function(pp){
+    if(!box.isConnected)return;
+    var pl=null,tradeNo=null;
+    pp.Buttons({
+      style:{layout:'vertical',color:'gold',shape:'rect',label:'paypal',tagline:false,height:44},
+      onClick:function(d,a){pl=getPayload();return pl?a.resolve():a.reject()},
+      createOrder:async function(){
+        setErr('');
+        var r=await callFn('create-order',Object.assign({},pl,{pay:'paypal'}));
+        if(!r||!r.paypalOrderId||!r.tradeNo)throw new Error('系統忙碌，請稍後再試');
+        tradeNo=r.tradeNo;return r.paypalOrderId;
+      },
+      onApprove:async function(){
+        try{
+          await callFn('paypal-pay',{action:'capture',tradeNo:tradeNo});
+          location.href='member.html?pay='+encodeURIComponent(tradeNo);
+        }catch(e){setErr(niceErr(e)+'（如果 PayPal 已經扣款，訂單會在幾分鐘內自動更新，請到會員專區查看）')}
+      },
+      onCancel:async function(){
+        if(tradeNo){try{await callFn('paypal-pay',{action:'cancel',tradeNo:tradeNo})}catch(_){}}
+        tradeNo=null;toast('已取消 PayPal 付款，購物車內容仍保留');
+      },
+      onError:function(e){if(tradeNo){callFn('paypal-pay',{action:'cancel',tradeNo:tradeNo}).catch(function(){});tradeNo=null}setErr(niceErr(e))}
+    }).render(box);
+  }).catch(function(){if(box.isConnected)box.innerHTML='<p class="mfoot">PayPal 暫時無法載入，請改用上方「前往付款」。</p>'});
+}
 async function checkout(body,btn,errEl){
   var label=btn&&btn.textContent;
   if(btn){btn.disabled=true;btn.textContent='正在前往綠界…'}
@@ -926,6 +969,8 @@ async function loadPublic(){
     var CH={};(rs[5].data||[]).forEach(function(r){(CH[r.course_id]=CH[r.course_id]||[]).push(r)});PUB.chapters=CH;
     (rs[3].data||[]).forEach(function(r){
       if(r.key==='payments_enabled')PUB.pay=(r.value===true);
+      if(r.key==='paypal_enabled')PUB.ppOn=(r.value===true);
+      if(r.key==='paypal_client_id'&&typeof r.value==='string')PUB.ppId=r.value.trim();
       if(r.key==='live_retention_days'&&typeof r.value==='number')PUB.liveDays=r.value;
       if(r.key==='line_url'&&r.value)CONFIG.lineUrl=r.value;
       if(r.key==='youtube_url'&&r.value)CONFIG.youtubeUrl=r.value;
@@ -1281,7 +1326,7 @@ function initCart(){
       (needShip&&PUB.pay?'<div class="rcpt"><h3>收件資料</h3><label class="fld" for="rName">收件人<input id="rName" autocomplete="name" maxlength="30" value="'+esc(rc.name||'')+'"></label><label class="fld" for="rPhone">手機<input id="rPhone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" value="'+esc(rc.phone||'')+'"></label><fieldset class="shipm"><legend>取貨方式</legend>'+[['home','黑貓宅配','運費 NT$'+HOME_FEE],['cvs_711','7-11 超商取貨','免運費'],['cvs_family','全家超商取貨','免運費']].map(function(o){return '<label class="shipopt'+(shipM===o[0]?' on':'')+'"><input type="radio" name="shipm" value="'+o[0]+'"'+(shipM===o[0]?' checked':'')+'><span>'+o[1]+'</span><em>'+o[2]+'</em></label>'}).join('')+'</fieldset>'+(shipM==='home'?'<label class="fld" for="rAddr">收件地址<input id="rAddr" autocomplete="street-address" maxlength="120" value="'+esc(rc.address||'')+'"></label>':'<label class="fld" for="rStore">取貨門市名稱<input id="rStore" maxlength="30" placeholder="例如：崇賢門市" value="'+esc(rc.store||'')+'"></label><label class="fld" for="rStoreId">門市店號<input id="rStoreId" maxlength="10" inputmode="text" placeholder="門市的店號代碼" value="'+esc(rc.storeId||'')+'"></label><p class="mfoot">'+(shipM==='cvs_711'?'店號可在 <a href="https://emap.pcsc.com.tw/" target="_blank" rel="noopener noreferrer">7-11 門市查詢</a> 找到':'店號可在全家官網的門市查詢找到')+'，填錯會寄不到，請再確認一次。</p>')+'</div>':'')+
       (PUB.pay?'<label class="fld" for="rNote">備註（選填）<input id="rNote" maxlength="100" value="'+esc(rc.note||'')+'"></label>':'')+
       (gone.length?'<p class="err">購物車內有已下架的教材，請先移除。</p>':'')+
-      '<div class="err" id="cartErr" role="alert"></div>'+(PUB.pay?'<button type="button" class="btn btn-fill" id="goPay"'+(gone.length?' disabled':'')+'>前往付款</button>':'<p class="paynote" id="noPay">線上付款即將開放。現在想訂購，可以直接到下方賣場購買；也可以透過 LINE 聯繫我們，我們會協助你完成。</p><a class="btn btn-fill" id="shop711" href="https://myship.7-11.com.tw/general/detail/GM2605159360578" target="_blank" rel="noopener noreferrer">到賣貨便下單</a><a class="btn btn-fill" id="shopShopee" href="https://shopee.tw/jackbombjack" target="_blank" rel="noopener noreferrer">到蝦皮下單</a><button type="button" class="btn btn-line" data-ext="lineUrl" id="lineOrder">用 LINE 聯繫訂購</button>')+(PUB.pay?'<div class="pay"><span>信用卡</span><span>超商繳費</span><span>ATM 轉帳</span></div><p class="mfoot">按下「前往付款」後，會轉到綠界科技的付款頁面，可用方式以該頁顯示為準。教材為實體書籍，付款成功後會寄到上方地址。</p><p class="mfoot" id="altShop">也可以選擇到賣場購買：</p><a class="btn btn-line" id="shop711" href="https://myship.7-11.com.tw/general/detail/GM2605159360578" target="_blank" rel="noopener noreferrer">到賣貨便下單</a><a class="btn btn-line" id="shopShopee" href="https://shopee.tw/jackbombjack" target="_blank" rel="noopener noreferrer">到蝦皮下單</a>':'')+'</aside></div>';
+      '<div class="err" id="cartErr" role="alert"></div>'+(PUB.pay?'<button type="button" class="btn btn-fill" id="goPay"'+(gone.length?' disabled':'')+'>前往付款</button>'+(ppReady()&&!gone.length?'<div class="ppwrap"><p class="mfoot">或使用 PayPal 付款（PayPal 帳戶或國際信用卡）：</p><div id="ppBtns"></div></div>':''):'<p class="paynote" id="noPay">線上付款即將開放。現在想訂購，可以直接到下方賣場購買；也可以透過 LINE 聯繫我們，我們會協助你完成。</p><a class="btn btn-fill" id="shop711" href="https://myship.7-11.com.tw/general/detail/GM2605159360578" target="_blank" rel="noopener noreferrer">到賣貨便下單</a><a class="btn btn-fill" id="shopShopee" href="https://shopee.tw/jackbombjack" target="_blank" rel="noopener noreferrer">到蝦皮下單</a><button type="button" class="btn btn-line" data-ext="lineUrl" id="lineOrder">用 LINE 聯繫訂購</button>')+(PUB.pay?'<div class="pay"><span>信用卡</span><span>超商繳費</span><span>ATM 轉帳</span></div><p class="mfoot">按下「前往付款」後，會轉到綠界科技的付款頁面，可用方式以該頁顯示為準。教材為實體書籍，付款成功後會寄到上方地址。</p><p class="mfoot" id="altShop">也可以選擇到賣場購買：</p><a class="btn btn-line" id="shop711" href="https://myship.7-11.com.tw/general/detail/GM2605159360578" target="_blank" rel="noopener noreferrer">到賣貨便下單</a><a class="btn btn-line" id="shopShopee" href="https://shopee.tw/jackbombjack" target="_blank" rel="noopener noreferrer">到蝦皮下單</a>':'')+'</aside></div>';
     $$('[data-inc]',app).forEach(function(b){b.addEventListener('click',function(){var id=b.getAttribute('data-inc');if(S.cart[id]<20)S.cart[id]++;save();refreshBadge();render()})});
     $$('[data-dec]',app).forEach(function(b){b.addEventListener('click',function(){var id=b.getAttribute('data-dec');S.cart[id]--;if(S.cart[id]<1)delete S.cart[id];save();refreshBadge();render()})});
     $$('[data-rm]',app).forEach(function(b){b.addEventListener('click',function(){delete S.cart[b.getAttribute('data-rm')];save();refreshBadge();render()})});
@@ -1289,20 +1334,23 @@ function initCart(){
     ['rName','rPhone','rAddr','rNote','rStore','rStoreId'].forEach(function(id){var el=$('#'+id);if(el)el.addEventListener('input',function(){saveRc(readRc())})});
     $$('input[name=shipm]',app).forEach(function(rd){rd.addEventListener('change',function(){saveRc(readRc());render()})});
     var lo=$('#lineOrder');if(lo)lo.addEventListener('click',function(){ext('lineUrl')});
-    var gp=$('#goPay');if(gp)gp.addEventListener('click',function(){
+    function cartPayload(){
       var r=readRc(),err=$('#cartErr');err.textContent='';
-      if(!U){askLogin('登入後即可結帳（購物車與收件資料會保留）');return}
+      if(!U){askLogin('登入後即可結帳（購物車與收件資料會保留）');return null}
+      if(gone.length){err.textContent='購物車裡有已下架的商品，請先移除。';return null}
       if(needShip){
-        if(r.name.trim().length<2){err.textContent='請填寫收件人姓名。';return}
-        if(!/^[0-9+\-\s()]{8,20}$/.test(r.phone.trim())){err.textContent='請填寫正確的手機號碼。';return}
-        if(shipM==='home'){if(r.address.trim().length<6){err.textContent='請填寫完整的收件地址。';return}}
+        if(r.name.trim().length<2){err.textContent='請填寫收件人姓名。';return null}
+        if(!/^[0-9+\-\s()]{8,20}$/.test(r.phone.trim())){err.textContent='請填寫正確的手機號碼。';return null}
+        if(shipM==='home'){if(r.address.trim().length<6){err.textContent='請填寫完整的收件地址。';return null}}
         else{
-          if(r.store.trim().length<2){err.textContent='請填寫取貨門市名稱。';return}
-          if(!/^[0-9A-Za-z]{3,10}$/.test(r.storeId.trim())){err.textContent='請填寫正確的門市店號（3～10 個英數字）。';return}
+          if(r.store.trim().length<2){err.textContent='請填寫取貨門市名稱。';return null}
+          if(!/^[0-9A-Za-z]{3,10}$/.test(r.storeId.trim())){err.textContent='請填寫正確的門市店號（3～10 個英數字）。';return null}
         }
       }
-      checkout({type:'cart',items:ids.map(function(id){return {id:id,qty:S.cart[id]}}),recipient:needShip?{name:r.name.trim(),phone:r.phone.trim(),address:shipM==='home'?r.address.trim():undefined}:undefined,shipping:needShip?{method:shipM,store_name:shipM==='home'?undefined:r.store.trim(),store_id:shipM==='home'?undefined:r.storeId.trim()}:undefined,note:r.note.trim()||undefined},this,err);
-    });
+      return {type:'cart',items:ids.map(function(id){return {id:id,qty:S.cart[id]}}),recipient:needShip?{name:r.name.trim(),phone:r.phone.trim(),address:shipM==='home'?r.address.trim():undefined}:undefined,shipping:needShip?{method:shipM,store_name:shipM==='home'?undefined:r.store.trim(),store_id:shipM==='home'?undefined:r.storeId.trim()}:undefined,note:r.note.trim()||undefined};
+    }
+    var gp=$('#goPay');if(gp)gp.addEventListener('click',function(){var b=cartPayload();if(b)checkout(b,this,$('#cartErr'))});
+    var ppb=$('#ppBtns');if(ppb)mountPaypal(ppb,cartPayload,function(m){$('#cartErr').textContent=m||''});
   }
   onAuth.push(render);render();
 }
@@ -1729,7 +1777,7 @@ function initEssay(){
 
 /* ---------- 會員專區 ---------- */
 var FUL={none:'',to_ship:'準備寄出',shipped:'已寄出',done:'已完成'};
-var ORD_ST={pending:'待付款',paid:'已付款',failed:'付款失敗',cancelled:'已取消'};
+var ORD_ST={pending:'待付款',paid:'已付款',failed:'付款失敗',cancelled:'已取消',refunded:'已退款'};
 var ORD_KIND={product:'教材',course:'課程',membership:'付費會員'};
 /* ---------- 新用戶導覽與新手任務 ---------- */
 var TOUR={
@@ -2207,7 +2255,8 @@ function initAdmin(){
   TABS.o=async function(body){
     await loadNames();
     var cols='id,merchant_trade_no,user_id,kind,status,amount,plan_id,course_id,recipient_name,recipient_phone,recipient_address,note,fulfillment,created_at,order_items(name,qty)';
-    var r=await sb.from('orders').select(cols+',ship_method,shipping_fee,cvs_store_name,cvs_store_id,essay_plan_id').order('created_at',{ascending:false}).limit(300);
+    var r=await sb.from('orders').select(cols+',ship_method,shipping_fee,cvs_store_name,cvs_store_id,essay_plan_id,pay_method,paypal_capture_id,refunded_amount').order('created_at',{ascending:false}).limit(300);
+    if(r.error)r=await sb.from('orders').select(cols+',ship_method,shipping_fee,cvs_store_name,cvs_store_id,essay_plan_id').order('created_at',{ascending:false}).limit(300);
     if(r.error)r=await sb.from('orders').select(cols).order('created_at',{ascending:false}).limit(300);
     var epm={};try{var epq=await sb.from('essay_plans').select('id,level,name');(epq.data||[]).forEach(function(x){epm[x.id]=x})}catch(_){}
     var rows=r.data||[];
@@ -2229,7 +2278,7 @@ function initAdmin(){
       if(ORD_TAB==='other')act=o.status!=='paid'?'<button type="button" class="btn btn-line sm pdel" data-odel="'+o.id+'">刪除</button>':'—';
       else act='<select data-ful="'+o.id+'" aria-label="出貨狀態">'+['to_ship','shipped','done'].map(function(v){return '<option value="'+v+'"'+(o.fulfillment===v?' selected':'')+'>'+FUL[v]+'</option>'}).join('')+'</select>'+(ORD_TAB==='done'?' <button type="button" class="btn btn-line sm pdel" data-odel="'+o.id+'">刪除</button>':'');
       var em=(names[o.user_id]||{}).email;
-      return '<tr><td>'+fmtDate(o.created_at)+'</td><td>'+esc(nm(o.user_id))+(em?'<br><small class="sub">'+esc(em)+'</small>':'')+'</td><td>'+what+rec+'</td><td>'+money(o.amount)+(o.shipping_fee>0?'<br><small class="sub">含運費 '+money(o.shipping_fee)+'</small>':'')+'</td><td><span class="pill '+(o.status==='paid'?'ok':o.status==='pending'?'warn':'')+'">'+(o.status==='pending'?'未付款':ORD_ST[o.status])+'</span></td><td>'+act+'</td></tr>'}).join('')+(list.length?'':'<tr><td colspan="6" class="none">'+emptyMsg+'</td></tr>')+'</tbody></table></div><p class="mfoot">教材付款成功後會自動列在「準備寄出」。寄出後把右邊改成「已寄出」，訂單會移到「已寄出」分頁；客人收到後改成「已完成」。「已完成」的訂單和未付款的訂單可以按「刪除」清掉（刪除後無法復原，付款紀錄也會一併移除，建議先到「設定」下載備份）；已付款但還沒完成的訂單不能刪。</p>';
+      return '<tr><td>'+fmtDate(o.created_at)+'</td><td>'+esc(nm(o.user_id))+(em?'<br><small class="sub">'+esc(em)+'</small>':'')+'</td><td>'+what+rec+'</td><td>'+money(o.amount)+(o.shipping_fee>0?'<br><small class="sub">含運費 '+money(o.shipping_fee)+'</small>':'')+'</td><td><span class="pill '+(o.status==='paid'?'ok':o.status==='pending'?'warn':'')+'">'+(o.status==='pending'?'未付款':ORD_ST[o.status])+'</span>'+(o.pay_method==='paypal'?'<br><small class="sub">PayPal'+(o.paypal_capture_id?'・交易編號 <span class="ppid">'+esc(o.paypal_capture_id)+'</span>':'')+'</small>':'')+(o.refunded_amount>0?'<br><small class="sub">已退款 '+money(o.refunded_amount)+(o.refunded_amount<o.amount?'（部分）':'')+'</small>':'')+'</td><td>'+act+'</td></tr>'}).join('')+(list.length?'':'<tr><td colspan="6" class="none">'+emptyMsg+'</td></tr>')+'</tbody></table></div><p class="mfoot">教材付款成功後會自動列在「準備寄出」。寄出後把右邊改成「已寄出」，訂單會移到「已寄出」分頁；客人收到後改成「已完成」。「已完成」的訂單和未付款的訂單可以按「刪除」清掉（刪除後無法復原，付款紀錄也會一併移除，建議先到「設定」下載備份）；已付款但還沒完成的訂單不能刪。</p>';
     $$('[data-ot]',body).forEach(function(b){b.addEventListener('click',function(){ORD_TAB=b.getAttribute('data-ot');TABS.o(body)})});
     $$('[data-ful]',body).forEach(function(s){s.addEventListener('change',async function(){
       var u=await sb.from('orders').update({fulfillment:s.value}).eq('id',s.getAttribute('data-ful'));
@@ -3061,7 +3110,7 @@ function initAdmin(){
     var st={};(sr.data||[]).forEach(function(x){st[x.key]=x.value});
     body.innerHTML='<h3>付費會員方案</h3><div class="twrap"><table class="tbl"><thead><tr><th>方案</th><th>金額（NT$）</th><th>扣款週期</th><th>開放</th><th></th></tr></thead><tbody>'+(pr.data||[]).map(function(p){
       return '<tr data-plan="'+esc(p.id)+'"><td>'+esc(p.name)+'</td><td><input type="number" min="1" step="10" data-f="amount" value="'+p.amount+'" style="width:100px"></td><td>每 '+p.frequency+' '+(p.period_type==='Y'?'年':p.period_type==='M'?'個月':'天')+'，最多 '+p.exec_times+' 期</td><td><input type="checkbox" data-f="active"'+(p.active?' checked':'')+' aria-label="開放"></td><td><button type="button" class="btn btn-line sm" data-psave="'+esc(p.id)+'">儲存</button></td></tr>'}).join('')+'</tbody></table></div><p class="mfoot">已經在扣款的訂閱者，金額不會跟著改（綠界以下單當時的金額為準）。價格確認後把「開放」打勾，網站才會顯示並開放加入。</p>'+
-      '<h3 style="margin-top:22px">網站設定</h3><form id="sForm" class="fm" style="max-width:520px"><label class="fld" style="flex-direction:row;gap:10px;align-items:center"><input type="checkbox" id="sPay"'+(st.payments_enabled===true?' checked':'')+'> 開放線上付款（教材、付費會員、付費課程）</label><label class="fld" for="sLine">LINE 官方帳號連結<input id="sLine" value="'+esc(st.line_url||'')+'" placeholder="https://lin.ee/…"></label><label class="fld" for="sYt">YouTube 頻道網址（公開直播）<input id="sYt" value="'+esc(st.youtube_url||'')+'" placeholder="https://www.youtube.com/@…"></label><label class="fld" for="sBank">作文批改匯款資訊（顯示在付款說明頁）<textarea id="sBank" rows="5" maxlength="500" placeholder="銀行：○○銀行（代碼 000)&#10；帳號：0000-000-000000&#10；戶名：○○○">'+esc(typeof st.bank_info==='string'?st.bank_info:'')+'</textarea></label><div class="err" id="sErr" role="alert"></div><button class="btn btn-fill" type="submit" style="align-self:flex-start">儲存</button></form>';
+      '<h3 style="margin-top:22px">網站設定</h3><form id="sForm" class="fm" style="max-width:520px"><label class="fld" style="flex-direction:row;gap:10px;align-items:center"><input type="checkbox" id="sPay"'+(st.payments_enabled===true?' checked':'')+'> 開放線上付款（教材、付費會員、付費課程）</label><label class="fld" style="flex-direction:row;gap:10px;align-items:center"><input type="checkbox" id="sPp"'+(st.paypal_enabled===true?' checked':'')+'> 開放 PayPal 付款（目前只有教材購物車）</label><label class="fld" for="sPpId">PayPal Client ID（公開代碼，不是 Secret）<input id="sPpId" value="'+esc(typeof st.paypal_client_id==='string'?st.paypal_client_id:'')+'" placeholder="A…（在 PayPal Developer 應用程式頁面複製）" autocomplete="off" spellcheck="false"></label><label class="fld" for="sLine">LINE 官方帳號連結<input id="sLine" value="'+esc(st.line_url||'')+'" placeholder="https://lin.ee/…"></label><label class="fld" for="sYt">YouTube 頻道網址（公開直播）<input id="sYt" value="'+esc(st.youtube_url||'')+'" placeholder="https://www.youtube.com/@…"></label><label class="fld" for="sBank">作文批改匯款資訊（顯示在付款說明頁）<textarea id="sBank" rows="5" maxlength="500" placeholder="銀行：○○銀行（代碼 000)&#10；帳號：0000-000-000000&#10；戶名：○○○">'+esc(typeof st.bank_info==='string'?st.bank_info:'')+'</textarea></label><div class="err" id="sErr" role="alert"></div><button class="btn btn-fill" type="submit" style="align-self:flex-start">儲存</button></form>';
     body.insertAdjacentHTML('beforeend','<h3 style="margin-top:26px">資料備份</h3><div class="bkbox"><p class="mfoot" style="margin:0 0 10px">把網站所有資料表（會員、作文與評語、訂單、課程、直播…）匯出成一個檔案存到你的電腦。建議每月備份一次，出大改動前也先備份。檔案內有學生個資，請存放在安全的地方，不要上傳到公開處。作文與封面的圖片檔本身不在其中，檔案內只有它們的路徑。</p><button type="button" class="btn btn-line" id="bkGo">下載資料備份</button> <span class="mfoot" id="bkMsg" role="status"></span></div>');
     $('#bkGo').addEventListener('click',async function(){
       var bt=this,msg=$('#bkMsg');bt.disabled=true;msg.textContent='備份中…';
@@ -3097,7 +3146,10 @@ function initAdmin(){
       e.preventDefault();var er2=$('#sErr'),a=$('#sLine').value.trim(),b2=$('#sYt').value.trim();
       function ok(u){if(!u)return true;try{return /^https?:$/.test(new URL(u).protocol)}catch(x){return false}}
       if(!ok(a)||!ok(b2)){er2.textContent='請貼上完整網址（https://…），或留空。';return}
-      var r2=await sb.from('site_settings').upsert([{key:'payments_enabled',value:$('#sPay').checked,updated_at:new Date().toISOString()},{key:'line_url',value:a,updated_at:new Date().toISOString()},{key:'youtube_url',value:b2,updated_at:new Date().toISOString()},{key:'bank_info',value:$('#sBank').value.trim(),updated_at:new Date().toISOString()}],{onConflict:'key'});
+      var ppId=$('#sPpId').value.trim(),ppOn=$('#sPp').checked;
+      if(ppId&&!/^[A-Za-z0-9_-]{20,120}$/.test(ppId)){er2.textContent='PayPal Client ID 格式不正確，請重新複製（只有英文字母、數字、底線與連字號）。';return}
+      if(ppOn&&!ppId){er2.textContent='要開放 PayPal 付款，請先填入 PayPal Client ID。';return}
+      var r2=await sb.from('site_settings').upsert([{key:'payments_enabled',value:$('#sPay').checked,updated_at:new Date().toISOString()},{key:'paypal_enabled',value:ppOn,updated_at:new Date().toISOString()},{key:'paypal_client_id',value:ppId,updated_at:new Date().toISOString()},{key:'line_url',value:a,updated_at:new Date().toISOString()},{key:'youtube_url',value:b2,updated_at:new Date().toISOString()},{key:'bank_info',value:$('#sBank').value.trim(),updated_at:new Date().toISOString()}],{onConflict:'key'});
       if(r2.error){er2.textContent='儲存失敗：'+niceErr(r2.error);return}
       er2.textContent='';toast('已儲存');
     });
