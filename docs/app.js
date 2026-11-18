@@ -10,6 +10,8 @@ var ico=function(id,st){return '<svg class="ico"'+(st?' style="'+st+'"':'')+'><u
 var esc=function(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
 var byId=function(list,id){for(var i=0;i<list.length;i++)if(list[i].id===id)return list[i]};
 var PAGE=document.body.getAttribute('data-page')||'';
+/* 網址列不顯示 index.html:直接用 /index.html 進來的人，網址會改成根網址（不重新載入） */
+try{if(/\/index\.html$/.test(location.pathname))history.replaceState(null,'',location.pathname.replace(/index\.html$/,'')+location.search+location.hash)}catch(e){}
 
 /* ---------- 水墨插圖生成（程式繪製，不使用圖片） ---------- */
 var INK_N=0;
